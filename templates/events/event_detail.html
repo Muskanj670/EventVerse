@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ event.title }} | EventVerse{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm overflow-hidden">
+            {% if event.image %}
+                <img src="{{ event.image.url }}" class="detail-image" alt="{{ event.title }}">
+            {% endif %}
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge text-bg-primary">{{ event.category.name }}</span>
+                    <span class="badge {% if event.event_timing_status == 'Upcoming' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ event.event_timing_status }}</span>
+                    <span class="badge text-bg-dark">{{ event.get_status_display }}</span>
+                </div>
+                <h1 class="mb-3">{{ event.title }}</h1>
+                <p class="text-muted mb-4">Organized by {{ event.organizer.username }} on {{ event.created_at|date:"M d, Y" }}</p>
+                <p class="mb-0">{{ event.description|linebreaks }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Event Details</h2>
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-3"><strong>Slug:</strong> {{ event.slug }}</li>
+                    <li class="mb-3"><strong>Date:</strong> {{ event.start_date|date:"M d, Y" }}{% if event.end_date != event.start_date %} - {{ event.end_date|date:"M d, Y" }}{% endif %}</li>
+                    <li class="mb-3"><strong>Time:</strong> {{ event.start_time|time:"h:i A" }} - {{ event.end_time|time:"h:i A" }}</li>
+                    <li class="mb-3"><strong>Venue:</strong> {{ event.venue }}</li>
+                    <li class="mb-3"><strong>City:</strong> {{ event.city }}</li>
+                    <li class="mb-3"><strong>Capacity:</strong> {{ event.capacity }}</li>
+                    <li class="mb-3"><strong>Price:</strong> Rs. {{ event.price }}</li>
+                    <li class="mb-3"><strong>Registrations:</strong> {{ registration_count }}</li>
+                    <li><strong>Confirmed:</strong> {{ confirmed_registration_count }}</li>
+                </ul>
+                {% if tickets %}
+                    <hr>
+                    <h3 class="h6 mb-3">Ticket Types</h3>
+                    {% for ticket in tickets %}
+                        <div class="border rounded-3 p-3 mb-2">
+                            <div class="fw-semibold">{{ ticket.type }}</div>
+                            <div class="small text-muted">Price: Rs. {{ ticket.price }} | Qty: {{ ticket.quantity }}</div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                {% if user == event.created_by or user_role == 'admin' %}
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="{% url 'events:event-update' event.pk %}" class="btn btn-brand">Edit Event</a>
+                        <a href="{% url 'events:event-delete' event.pk %}" class="btn btn-outline-danger">Delete Event</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

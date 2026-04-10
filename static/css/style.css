@@ -1,0 +1,82 @@
+body {
+    background: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+    color: #1f2937;
+}
+
+.navbar {
+    background: linear-gradient(90deg, #1d3557, #457b9d);
+}
+
+.btn-brand {
+    background-color: #e76f51;
+    border-color: #e76f51;
+    color: #fff;
+}
+
+.btn-brand:hover,
+.btn-brand:focus {
+    background-color: #d85b3a;
+    border-color: #d85b3a;
+    color: #fff;
+}
+
+.hero-section {
+    background: linear-gradient(135deg, rgba(69, 123, 157, 0.15), rgba(231, 111, 81, 0.18));
+    border: 1px solid rgba(29, 53, 87, 0.08);
+}
+
+.hero-card,
+.card {
+    border-radius: 1rem;
+}
+
+.event-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.event-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 1rem 2rem rgba(31, 41, 55, 0.08);
+}
+
+.event-card-image,
+.detail-image {
+    height: 240px;
+    object-fit: cover;
+}
+
+.stat-card {
+    color: #fff;
+    overflow: hidden;
+}
+
+.stat-card-primary {
+    background: linear-gradient(135deg, #1d3557, #457b9d);
+}
+
+.stat-card-success {
+    background: linear-gradient(135deg, #1f7a63, #2a9d8f);
+}
+
+.stat-card-dark {
+    background: linear-gradient(135deg, #495057, #212529);
+}
+
+.stat-card-accent {
+    background: linear-gradient(135deg, #f4a261, #e76f51);
+}
+
+.form-control,
+.form-select {
+    border-radius: 0.75rem;
+    padding: 0.75rem 0.9rem;
+}
+
+.page-link {
+    color: #1d3557;
+}
+
+.page-item.active .page-link {
+    background-color: #1d3557;
+    border-color: #1d3557;
+}

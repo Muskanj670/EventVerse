@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Signup | EventVerse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-4">Create your account</h1>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.name == 'email' %}
+                                <div id="emailValidationMessage" class="small mt-1"></div>
+                            {% endif %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text|safe }}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-brand w-100">Signup</button>
+                </form>
+                <p class="mt-3 mb-0">Already have an account? <a href="{% url 'accounts:login' %}">Login here</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const emailInput = document.getElementById('id_email');
+    const emailMessage = document.getElementById('emailValidationMessage');
+    let emailTimer;
+
+    function setEmailMessage(message, statusClass) {
+        emailMessage.textContent = message;
+        emailMessage.className = `small mt-1 ${statusClass}`;
+    }
+
+    if (emailInput && emailMessage) {
+        emailInput.addEventListener('input', function () {
+            clearTimeout(emailTimer);
+            const email = emailInput.value.trim();
+
+            if (!email) {
+                setEmailMessage('', '');
+                return;
+            }
+
+            setEmailMessage('Checking email availability...', 'text-muted');
+            emailTimer = setTimeout(async () => {
+                const response = await fetch(`{% url 'accounts:validate-email' %}?email=${encodeURIComponent(email)}`);
+                const data = await response.json();
+                setEmailMessage(data.message, data.available ? 'text-success' : 'text-danger');
+            }, 350);
+        });
+    }
+</script>
+{% endblock %}

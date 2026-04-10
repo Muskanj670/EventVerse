@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit Event{% else %}Create Event{% endif %} | EventVerse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-4">{% if object %}Update Event{% else %}Create New Event{% endif %}</h1>
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+                    <div class="row">
+                        {% for field in form %}
+                            <div class="{% if field.name == 'description' %}col-12{% else %}col-md-6{% endif %} mb-3">
+                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% for error in field.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-brand">{% if object %}Save Changes{% else %}Create Event{% endif %}</button>
+                        <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | EventVerse{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">{% if dashboard_role == 'admin' %}Admin Analytics Dashboard{% else %}Organizer Dashboard{% endif %}</h1>
+        <p class="text-muted mb-0">
+            {% if dashboard_role == 'admin' %}
+                Track platform-wide activity, event mix, and monthly trends.
+            {% else %}
+                Track your event performance, upcoming schedule, and category spread.
+            {% endif %}
+        </p>
+    </div>
+    <a href="{% url 'events:event-create' %}" class="btn btn-brand">Create Event</a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-primary">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">Total Events</p>
+                <h2 class="display-6 mb-0">{{ total_events }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-success">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">Upcoming</p>
+                <h2 class="display-6 mb-0">{{ upcoming_events }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-dark">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">Past Events</p>
+                <h2 class="display-6 mb-0">{{ past_events }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-accent">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">This Month</p>
+                <h2 class="display-6 mb-0">{{ this_month_events }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-success">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">Confirmed Registrations</p>
+                <h2 class="display-6 mb-0">{{ confirmed_registrations }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm stat-card stat-card-primary">
+            <div class="card-body">
+                <p class="text-uppercase small mb-2">Estimated Revenue</p>
+                <h2 class="display-6 mb-0">Rs. {{ estimated_revenue }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Events by Category</h2>
+                    <span class="badge text-bg-light">Distribution</span>
+                </div>
+                <canvas id="categoryChart" height="280"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Upcoming vs Past</h2>
+                    <span class="badge text-bg-light">Status Mix</span>
+                </div>
+                <canvas id="statusChart" height="280"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Monthly Event Trend</h2>
+                    <span class="badge text-bg-light">Timeline</span>
+                </div>
+                <canvas id="monthlyChart" height="140"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h4 mb-1">{% if dashboard_role == 'admin' %}All Managed Events{% else %}My Events{% endif %}</h2>
+        <p class="text-muted mb-0">Use the quick actions below to review, edit, or remove events.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for event in events %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm event-card">
+                {% if event.image %}
+                    <img src="{{ event.image.url }}" class="card-img-top event-card-image" alt="{{ event.title }}">
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <span class="badge text-bg-primary">{{ event.category.name }}</span>
+                        <span class="badge {% if event.event_timing_status == 'Upcoming' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ event.event_timing_status }}</span>
+                        <span class="badge text-bg-dark">{{ event.get_status_display }}</span>
+                    </div>
+                    <h2 class="h5">{{ event.title }}</h2>
+                    <p class="text-muted small mb-2">{{ event.start_date|date:"M d, Y" }} at {{ event.start_time|time:"h:i A" }}</p>
+                    <p class="text-muted small mb-3">{{ event.venue }}, {{ event.city }}</p>
+                    <p class="flex-grow-1">{{ event.description|truncatechars:100 }}</p>
+                    <div class="d-flex gap-2 mt-3">
+                        <a href="{% url 'events:event-detail' event.pk %}" class="btn btn-outline-secondary btn-sm">View</a>
+                        <a href="{% url 'events:event-update' event.pk %}" class="btn btn-brand btn-sm">Edit</a>
+                        <a href="{% url 'events:event-delete' event.pk %}" class="btn btn-outline-danger btn-sm">Delete</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center p-5">
+                    <p class="mb-3">You have not created any events yet.</p>
+                    <a href="{% url 'events:event-create' %}" class="btn btn-brand">Create Your First Event</a>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+{% include 'partials/pagination.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const categoryLabels = {{ chart_category_labels|safe }};
+    const categoryTotals = {{ chart_category_totals|safe }};
+    const statusTotals = {{ chart_status_totals|safe }};
+    const monthLabels = {{ chart_month_labels|safe }};
+    const monthTotals = {{ chart_month_totals|safe }};
+
+    if (document.getElementById('categoryChart')) {
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'bar',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    label: 'Events',
+                    data: categoryTotals,
+                    backgroundColor: ['#1d3557', '#457b9d', '#a8dadc', '#f4a261', '#e76f51', '#2a9d8f', '#6c757d'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    if (document.getElementById('statusChart')) {
+        new Chart(document.getElementById('statusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Upcoming', 'Past'],
+                datasets: [{
+                    data: statusTotals,
+                    backgroundColor: ['#2a9d8f', '#6c757d']
+                }]
+            },
+            options: { responsive: true }
+        });
+    }
+
+    if (document.getElementById('monthlyChart')) {
+        new Chart(document.getElementById('monthlyChart'), {
+            type: 'line',
+            data: {
+                labels: monthLabels,
+                datasets: [{
+                    label: 'Events',
+                    data: monthTotals,
+                    fill: true,
+                    tension: 0.35,
+                    borderColor: '#e76f51',
+                    backgroundColor: 'rgba(231, 111, 81, 0.16)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

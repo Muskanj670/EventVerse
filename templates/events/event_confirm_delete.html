@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Event | EventVerse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5 text-center">
+                <h1 class="h3 mb-3">Delete Event</h1>
+                <p class="mb-4">Are you sure you want to delete "{{ object.title }}"? This action cannot be undone.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                    <a href="{% url 'events:event-detail' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
