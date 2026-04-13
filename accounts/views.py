@@ -1,10 +1,11 @@
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
 from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import CreateView
+from django.views.generic import CreateView, TemplateView
 
 from .forms import CustomAuthenticationForm, SignupForm
 
@@ -49,3 +50,18 @@ class EmailValidationView(View):
         if exists:
             return JsonResponse({'valid': True, 'available': False, 'message': 'This email is already in use.'})
         return JsonResponse({'valid': True, 'available': True, 'message': 'Email is available.'})
+
+
+class ProfileView(LoginRequiredMixin, TemplateView):
+    template_name = 'accounts/profile.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        registrations = (
+            self.request.user.registrations.select_related('event', 'event__category')
+            .order_by('-registered_at')
+        )
+        context['profile'] = self.request.user.profile
+        context['booking_history'] = registrations
+        context['total_booked_seats'] = sum(registration.seat_count for registration in registrations)
+        return context

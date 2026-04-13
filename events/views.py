@@ -1,13 +1,14 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Q
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from accounts.utils import get_user_role, is_organizer_or_admin
 
-from .forms import EventForm
+from .forms import BookingForm, EventForm
 from .models import Category, Event
 
 
@@ -18,7 +19,7 @@ class EventListView(ListView):
     paginate_by = 6
 
     def get_queryset(self):
-        queryset = Event.objects.select_related('organizer', 'category')
+        queryset = Event.objects.select_related('organizer', 'category').prefetch_related('media_assets')
         category = self.request.GET.get('category')
         query = self.request.GET.get('q')
         city = self.request.GET.get('city')
@@ -53,12 +54,30 @@ class EventDetailView(DetailView):
     template_name = 'events/event_detail.html'
     context_object_name = 'event'
 
+    def get_queryset(self):
+        queryset = (
+            Event.objects.select_related('organizer', 'category')
+            .prefetch_related('tickets', 'media_assets', 'registrations')
+        )
+        if is_organizer_or_admin(self.request.user):
+            return queryset
+        return queryset.filter(status=Event.Status.PUBLISHED)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         event = self.object
         context['tickets'] = event.tickets.all()
-        context['registration_count'] = event.registrations.count()
-        context['confirmed_registration_count'] = event.registrations.filter(status='confirmed').count()
+        context['booking_form'] = BookingForm(event=event)
+        context['can_book'] = (
+            self.request.user.is_authenticated
+            and not is_organizer_or_admin(self.request.user)
+            and event.status == Event.Status.PUBLISHED
+            and event.end_datetime >= timezone.now()
+            and event.available_seats > 0
+        )
+        context['user_registration'] = (
+            event.registrations.filter(user=self.request.user).first() if self.request.user.is_authenticated else None
+        )
         return context
 
 
@@ -107,3 +126,39 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, 'Event deleted successfully.')
         return super().form_valid(form)
+
+
+def book_event_seats(request, pk):
+    event = get_object_or_404(
+        Event.objects.select_related('organizer', 'category').prefetch_related('tickets', 'media_assets'),
+        pk=pk,
+        status=Event.Status.PUBLISHED,
+    )
+
+    if not request.user.is_authenticated:
+        messages.error(request, 'Please log in to book seats for this event.')
+        return redirect('accounts:login')
+
+    if is_organizer_or_admin(request.user):
+        messages.error(request, 'Organizer and admin accounts cannot book seats from the attendee view.')
+        return redirect('events:event-detail', pk=event.pk)
+
+    if request.method != 'POST':
+        return redirect('events:event-detail', pk=event.pk)
+
+    if event.end_datetime < timezone.now():
+        messages.error(request, 'This event has already ended.')
+        return redirect('events:event-detail', pk=event.pk)
+
+    form = BookingForm(request.POST, event=event)
+    if form.is_valid():
+        registration = form.save(request.user)
+        messages.success(
+            request,
+            f'{registration.seat_count} seat(s) booked successfully for {event.title}.',
+        )
+    else:
+        for error in form.errors.get('seat_count', []):
+            messages.error(request, error)
+
+    return redirect('events:event-detail', pk=event.pk)

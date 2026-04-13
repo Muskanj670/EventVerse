@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Category, Event, Notification, Payment, Registration, Ticket
+from .models import Category, Event, EventMedia, Notification, Payment, Registration, Ticket
+
+
+class EventMediaInline(admin.TabularInline):
+    model = EventMedia
+    extra = 0
 
 
 @admin.register(Category)
@@ -11,11 +16,29 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('title', 'category', 'organizer', 'city', 'start_date', 'status', 'price', 'capacity')
+    list_display = (
+        'title',
+        'category',
+        'organizer',
+        'city',
+        'start_date',
+        'status',
+        'price',
+        'capacity',
+        'available_seats',
+    )
     list_filter = ('category', 'status', 'city', 'start_date', 'created_at')
     search_fields = ('title', 'description', 'venue', 'city', 'organizer__username', 'slug')
     prepopulated_fields = {'slug': ('title',)}
     date_hierarchy = 'start_date'
+    inlines = [EventMediaInline]
+
+
+@admin.register(EventMedia)
+class EventMediaAdmin(admin.ModelAdmin):
+    list_display = ('event', 'media_type', 'created_at')
+    list_filter = ('media_type', 'created_at')
+    search_fields = ('event__title',)
 
 
 @admin.register(Ticket)
@@ -26,7 +49,7 @@ class TicketAdmin(admin.ModelAdmin):
 
 @admin.register(Registration)
 class RegistrationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'event', 'ticket', 'status', 'registered_at')
+    list_display = ('user', 'event', 'ticket', 'seat_count', 'status', 'registered_at')
     list_filter = ('status', 'registered_at')
     search_fields = ('user__username', 'event__title', 'ticket__type')
 

@@ -9,7 +9,11 @@ class HomeView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['featured_events'] = Event.objects.select_related('organizer', 'category').filter(status='published')[:6]
+        context['featured_events'] = (
+            Event.objects.select_related('organizer', 'category')
+            .prefetch_related('media_assets')
+            .filter(status='published')[:6]
+        )
         context['categories'] = Category.objects.all()
         return context
 
@@ -22,7 +26,11 @@ class SearchView(ListView):
 
     def get_queryset(self):
         query = self.request.GET.get('q', '').strip()
-        queryset = Event.objects.select_related('organizer', 'category').filter(status='published')
+        queryset = (
+            Event.objects.select_related('organizer', 'category')
+            .prefetch_related('media_assets')
+            .filter(status='published')
+        )
         if query:
             queryset = queryset.filter(Q(title__icontains=query) | Q(description__icontains=query))
         return queryset

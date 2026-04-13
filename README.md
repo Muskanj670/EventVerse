@@ -1,159 +1,118 @@
-# 🌟 EventVerse – Smart Event Management System
+# EventVerse
 
-EventVerse is a full-featured event management platform built using Django. It enables users to create, manage, and attend events with ease, offering powerful tools for organizers, attendees, and administrators.
+EventVerse is a Django-based event management system for attendees, organizers, and admins. It supports event discovery, event publishing, organizer analytics, seat booking, attendee booking history, and media-rich event pages with image/video carousels.
 
----
+## What the Project Does
 
-## 🚀 Key Highlights
+- Attendees can browse published events, search by keyword, filter by category/city, view attendee-focused event details, book seats, and review booking history from their profile page.
+- Organizers can create, edit, and delete events, add multiple images and videos for a carousel, share a Google Maps venue link, set event capacity and price, and use either an existing category or a custom one.
+- Admins inherit organizer visibility and can manage platform data through Django admin.
 
-- 🔐 Role-based authentication system
-- 📅 Complete event lifecycle management
-- 🎟️ Advanced ticketing & registration
-- 📊 Analytics dashboard for insights
-- 🔎 Smart search and filtering
-- 💳 Payment tracking system
-- 🔔 Notification system
+## Core Features
 
----
+- Role-based authentication with attendee, organizer, and admin flows
+- Public event listing, featured events, search, and filtering
+- Event creation and editing with title, description, venue, city, schedule, capacity, price, status, Google Maps venue link, and multiple image/video uploads
+- Existing or custom category creation during event setup
+- Event detail carousel for uploaded media
+- Seat availability tracking based on confirmed bookings
+- Seat booking from the attendee-facing event detail page
+- Profile page with booking history and total booked seats
+- Organizer/admin dashboard with event analytics and managed event listings
+- Admin support for categories, events, event media, tickets, registrations, payments, and notifications
 
-## 👥 User Roles
+## Apps and Responsibilities
 
-### 👤 Attendees
+- `accounts/`: signup, login, logout, profile roles, email validation, and booking history page
+- `core/`: home page and search
+- `dashboard/`: organizer/admin analytics and event management summary
+- `events/`: events, categories, media gallery, ticket defaults, registrations, payments, and notifications
+- `EventVerse/`: settings and root URL configuration
 
-- Browse and search events
-- Register for events
-- View event details and tickets
+## Directory Overview
 
-### 🎯 Organizers
+```text
+EventVerse/
+|-- EventVerse/                Django project settings and URL config
+|-- accounts/                  Authentication, profiles, and profile page
+|-- core/                      Home page and search
+|-- dashboard/                 Organizer/admin analytics
+|-- events/                    Events, media, booking, payments, notifications
+|-- static/
+|   `-- css/                   Shared styling
+|-- templates/
+|   |-- accounts/              Login, signup, profile
+|   |-- core/                  Home and search pages
+|   |-- dashboard/             Dashboard UI
+|   |-- events/                Event list/detail/form/delete pages
+|   `-- partials/              Shared pagination partial
+|-- build.sh                   Deployment/build helper
+|-- db.sqlite3                 SQLite database
+|-- manage.py                  Django management entry point
+|-- README.md
+`-- requirements.txt
+```
 
-- Create and manage events
-- Track registrations and revenue
-- Access dashboard analytics
+## Data Model Summary
 
-### 🛠️ Admins
+- `Category`: reusable event categories
+- `Event`: main event record with organizer, schedule, capacity, pricing, status, Google Maps URL, and legacy cover image support
+- `EventMedia`: multiple uploaded image/video assets for each event
+- `Ticket`: default `General Admission` ticket synced to event capacity and price
+- `Registration`: attendee bookings, booking status, and number of seats booked
+- `Payment`: payment metadata for future or extended payment workflows
+- `Notification`: in-app notification records
+- `UserProfile`: attendee/organizer role, phone, city, and profile metadata
 
-- Full system control via admin panel
-- Manage users, events, and categories
-- Monitor overall platform activity
+## Tech Stack
 
----
+- Python
+- Django 6
+- SQLite
+- Django Templates
+- Bootstrap 5
+- Pillow
+- WhiteNoise
 
-## ⚙️ Features
+## Local Setup
 
-### 🔐 User Management
-
-- Secure authentication system
-- Role-based access control
-- Profile management (phone, city)
-
-### 📅 Event Management
-
-- Create, edit, delete events
-- Event categories and filtering
-- Event status:
-  - Draft
-  - Published
-  - Cancelled
-  - Completed
-- Image uploads and venue details
-- Timezone-aware scheduling
-
-### 🎟️ Ticketing System
-
-- Multiple ticket types per event
-- Pricing and capacity limits
-- Registration tracking
-
-### 📊 Dashboard & Analytics
-
-- Organizer and admin dashboards
-- Event statistics (upcoming, past, revenue)
-- Category and monthly insights
-
-### 🔍 Search & Discovery
-
-- Search by title, description, city
-- Filter by category and status
-- Featured events
-
-### 💳 Payment System
-
-- Transaction ID tracking
-- Status:
-  - Pending
-  - Success
-  - Failed
-  - Refunded
-
-### 🔔 Notifications
-
-- User notification system
-- Read/unread tracking
-
----
-
-## 🛠️ Tech Stack
-
-- Backend: Django
-- Frontend: HTML, CSS, Django Templates
-- Database: SQLite
-- ORM: Django ORM
-
----
-
-## 📦 Installation
-
-### Prerequisites
-
-- Python 3.8+
-- pip
-
----
-
-### Setup
+1. Create and activate a virtual environment.
+2. Install dependencies:
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd EventVerse
-
-# Create virtual environment
-python -m venv venv
-
-# Activate environment
-# Windows
-venv\Scripts\activate
-
-# Mac/Linux
-source venv/bin/activate
-
-# Install dependencies
-pip install django
-
-# Apply migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Run server
-python manage.py runserver
-
-# Open in browser:
-http://127.0.0.1:8000/
-
-# 📁 Project Structure
-EventVerse/
-│
-├── accounts/        # User authentication
-├── core/            # Homepage & search
-├── dashboard/       # Analytics
-├── events/          # Event management
-│
-├── templates/       # HTML files
-├── static/          # CSS & assets
-│
-├── EventVerse/      # Settings & URLs
-├── db.sqlite3
-└── manage.py
+pip install -r requirements.txt
 ```
+
+3. Apply migrations:
+
+```bash
+python manage.py migrate
+```
+
+4. Create an admin user if needed:
+
+```bash
+python manage.py createsuperuser
+```
+
+5. Start the development server:
+
+```bash
+python manage.py runserver
+```
+
+6. Open `http://127.0.0.1:8000/`
+
+## Test Suite
+
+Run the project tests with:
+
+```bash
+python manage.py test
+```
+
+## Notes
+
+- Media uploads are served through Django in development when `DEBUG=True`.
+- Published events are visible to attendees; organizers/admins can also manage draft, cancelled, and completed events.
+- Existing single-image events still render correctly, while newly uploaded image/video sets appear as a carousel.

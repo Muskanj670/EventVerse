@@ -10,17 +10,47 @@
                 <h1 class="h3 mb-4">{% if object %}Update Event{% else %}Create New Event{% endif %}</h1>
                 <form method="post" enctype="multipart/form-data" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                     <div class="row">
                         {% for field in form %}
-                            <div class="{% if field.name == 'description' %}col-12{% else %}col-md-6{% endif %} mb-3">
+                            <div class="{% if field.name == 'description' or field.name == 'media_files' %}col-12{% else %}col-md-6{% endif %} mb-3">
                                 <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                                 {{ field }}
+                                {% if field.help_text %}
+                                    <div class="form-text">{{ field.help_text }}</div>
+                                {% endif %}
                                 {% for error in field.errors %}
                                     <div class="text-danger small">{{ error }}</div>
                                 {% endfor %}
                             </div>
                         {% endfor %}
                     </div>
+                    {% if object and object.media_assets.all %}
+                        <div class="mt-2">
+                            <h2 class="h6">Current Gallery</h2>
+                            <div class="row g-3">
+                                {% for media in object.media_assets.all %}
+                                    <div class="col-md-4">
+                                        <div class="media-preview-card rounded-4 border p-2 h-100">
+                                            {% if media.media_type == 'video' %}
+                                                <video class="media-preview" controls preload="metadata">
+                                                    <source src="{{ media.file.url }}">
+                                                </video>
+                                            {% else %}
+                                                <img src="{{ media.file.url }}" alt="{{ object.title }}" class="media-preview">
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
                     <div class="d-flex gap-2 mt-3">
                         <button type="submit" class="btn btn-brand">{% if object %}Save Changes{% else %}Create Event{% endif %}</button>
                         <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Cancel</a>

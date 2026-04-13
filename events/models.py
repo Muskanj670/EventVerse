@@ -44,6 +44,7 @@ class Event(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     image = models.ImageField(upload_to='events/', blank=True, null=True)
+    google_maps_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -72,6 +73,28 @@ class Event(models.Model):
     def created_by(self):
         return self.organizer
 
+    @property
+    def confirmed_seats(self):
+        return (
+            self.registrations.filter(status=Registration.Status.CONFIRMED)
+            .aggregate(total=models.Sum('seat_count'))
+            .get('total')
+            or 0
+        )
+
+    @property
+    def available_seats(self):
+        return max(self.capacity - self.confirmed_seats, 0)
+
+    @property
+    def primary_media(self):
+        media_item = self.media_assets.first()
+        if media_item:
+            return media_item
+        if self.image:
+            return type('LegacyImage', (), {'media_type': EventMedia.MediaType.IMAGE, 'file': self.image})()
+        return None
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base_slug = slugify(self.title)
@@ -82,9 +105,37 @@ class Event(models.Model):
                 slug = f'{base_slug}-{counter}'
             self.slug = slug
         super().save(*args, **kwargs)
+        self.ensure_default_ticket()
 
     def get_absolute_url(self):
         return reverse('events:event-detail', kwargs={'pk': self.pk})
+
+    def ensure_default_ticket(self):
+        Ticket.objects.update_or_create(
+            event=self,
+            type='General Admission',
+            defaults={
+                'price': self.price,
+                'quantity': self.capacity,
+            },
+        )
+
+
+class EventMedia(models.Model):
+    class MediaType(models.TextChoices):
+        IMAGE = 'image', 'Image'
+        VIDEO = 'video', 'Video'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='media_assets')
+    file = models.FileField(upload_to='events/media/')
+    media_type = models.CharField(max_length=10, choices=MediaType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'{self.event.title} - {self.media_type}'
 
 
 class Ticket(models.Model):
@@ -109,6 +160,7 @@ class Registration(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='registrations')
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='registrations')
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='registrations')
+    seat_count = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     registered_at = models.DateTimeField(auto_now_add=True)
 

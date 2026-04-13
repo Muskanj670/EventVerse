@@ -6,8 +6,38 @@
 <div class="row g-4">
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm overflow-hidden">
-            {% if event.image %}
-                <img src="{{ event.image.url }}" class="detail-image" alt="{{ event.title }}">
+            {% if event.media_assets.all or event.image %}
+                <div id="eventMediaCarousel" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-inner">
+                        {% for media in event.media_assets.all %}
+                            <div class="carousel-item {% if forloop.first %}active{% endif %}">
+                                {% if media.media_type == 'video' %}
+                                    <video class="detail-image w-100" controls preload="metadata">
+                                        <source src="{{ media.file.url }}">
+                                    </video>
+                                {% else %}
+                                    <img src="{{ media.file.url }}" class="detail-image d-block w-100" alt="{{ event.title }}">
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            {% if event.image %}
+                                <div class="carousel-item active">
+                                    <img src="{{ event.image.url }}" class="detail-image d-block w-100" alt="{{ event.title }}">
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% if event.media_assets.count > 1 %}
+                        <button class="carousel-control-prev" type="button" data-bs-target="#eventMediaCarousel" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#eventMediaCarousel" data-bs-slide="next">
+                            <span class="carousel-control-next-icon"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    {% endif %}
+                </div>
             {% endif %}
             <div class="card-body p-4">
                 <div class="d-flex flex-wrap gap-2 mb-3">
@@ -31,10 +61,15 @@
                     <li class="mb-3"><strong>Time:</strong> {{ event.start_time|time:"h:i A" }} - {{ event.end_time|time:"h:i A" }}</li>
                     <li class="mb-3"><strong>Venue:</strong> {{ event.venue }}</li>
                     <li class="mb-3"><strong>City:</strong> {{ event.city }}</li>
-                    <li class="mb-3"><strong>Capacity:</strong> {{ event.capacity }}</li>
+                    <li class="mb-3"><strong>Available Seats:</strong> {{ event.available_seats }}</li>
                     <li class="mb-3"><strong>Price:</strong> Rs. {{ event.price }}</li>
-                    <li class="mb-3"><strong>Registrations:</strong> {{ registration_count }}</li>
-                    <li><strong>Confirmed:</strong> {{ confirmed_registration_count }}</li>
+                    {% if event.google_maps_url %}
+                        <li class="mb-3"><strong>Map:</strong> <a href="{{ event.google_maps_url }}" target="_blank" rel="noopener">Open Google Maps</a></li>
+                    {% endif %}
+                    {% if user == event.created_by or user_role == 'admin' %}
+                        <li class="mb-3"><strong>Capacity:</strong> {{ event.capacity }}</li>
+                        <li><strong>Confirmed Seats:</strong> {{ event.confirmed_seats }}</li>
+                    {% endif %}
                 </ul>
                 {% if tickets %}
                     <hr>
@@ -45,6 +80,30 @@
                             <div class="small text-muted">Price: Rs. {{ ticket.price }} | Qty: {{ ticket.quantity }}</div>
                         </div>
                     {% endfor %}
+                {% endif %}
+                {% if user_registration %}
+                    <div class="alert alert-success mt-4 mb-0">
+                        You have booked {{ user_registration.seat_count }} seat{{ user_registration.seat_count|pluralize }} for this event.
+                    </div>
+                {% endif %}
+                {% if can_book %}
+                    <hr>
+                    <h3 class="h6 mb-3">Book Seats</h3>
+                    <form method="post" action="{% url 'events:event-book' event.pk %}" class="d-grid gap-3">
+                        {% csrf_token %}
+                        <div>
+                            <label class="form-label" for="{{ booking_form.seat_count.id_for_label }}">{{ booking_form.seat_count.label }}</label>
+                            {{ booking_form.seat_count }}
+                            <div class="form-text">You can book up to {{ event.available_seats }} available seat{{ event.available_seats|pluralize }}.</div>
+                        </div>
+                        <button type="submit" class="btn btn-brand">Book Seat</button>
+                    </form>
+                {% elif not user.is_authenticated %}
+                    <div class="d-grid mt-4">
+                        <a href="{% url 'accounts:login' %}" class="btn btn-brand">Login to Book</a>
+                    </div>
+                {% elif event.available_seats == 0 %}
+                    <div class="alert alert-warning mt-4 mb-0">This event is fully booked.</div>
                 {% endif %}
                 {% if user == event.created_by or user_role == 'admin' %}
                     <div class="d-grid gap-2 mt-4">

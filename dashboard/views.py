@@ -23,7 +23,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        queryset = Event.objects.select_related('organizer', 'category')
+        queryset = Event.objects.select_related('organizer', 'category').prefetch_related('media_assets')
         if get_user_role(self.request.user) != 'admin':
             queryset = queryset.filter(organizer=self.request.user)
         return queryset
