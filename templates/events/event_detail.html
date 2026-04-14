@@ -103,7 +103,7 @@
                                 </button>
                             </form>
                             {% if can_cancel_booking %}
-                                <form method="post" action="{% url 'events:event-cancel' event.pk %}">
+                                <form method="post" action="{% url 'events:event-cancel' event.pk %}" data-cancel-booking-form>
                                     {% csrf_token %}
                                     <div class="mb-2">
                                         <label class="form-label" for="{{ cancellation_form.seat_count.id_for_label }}">{{ cancellation_form.seat_count.label }}</label>
@@ -145,4 +145,20 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('[data-cancel-booking-form]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            const seatInput = form.querySelector('input[name="seat_count"]');
+            const seats = seatInput && seatInput.value ? seatInput.value : 'all';
+            const seatLabel = seats === '1' ? 'seat' : 'seats';
+            const confirmed = window.confirm('Cancel ' + seats + ' ' + seatLabel + ' for this booking?');
+            if (!confirmed) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>
 {% endblock %}

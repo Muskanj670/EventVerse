@@ -21,11 +21,15 @@
                 </p>
                 <p class="mb-4"><strong>City:</strong> {{ profile.city|default:'Not added' }}</p>
                 <div class="rounded-4 bg-white p-3 shadow-sm">
-                    <div class="small text-uppercase text-muted mb-1">Total Booked Seats</div>
+                    <div class="small text-uppercase text-muted mb-1">
+                        {% if can_view_booking_history %}Total Booked Seats{% else %}Booked Seats{% endif %}
+                    </div>
                     <div class="display-6 mb-0">{{ total_booked_seats }}</div>
                 </div>
                 <div class="rounded-4 bg-white p-3 shadow-sm mt-3">
-                    <div class="small text-uppercase text-muted mb-1">Cancelled Seats</div>
+                    <div class="small text-uppercase text-muted mb-1">
+                        {% if can_view_booking_history %}Cancelled Seats{% else %}Cancelled Bookings{% endif %}
+                    </div>
                     <div class="display-6 mb-0">{{ total_cancelled_seats }}</div>
                 </div>
             </div>
@@ -34,55 +38,148 @@
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h2 class="h4 mb-1">Booking History</h2>
-                        <p class="text-muted mb-0">All your event seat bookings are listed here.</p>
+                {% if can_view_booking_history %}
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h2 class="h4 mb-1">Booking History</h2>
+                            <p class="text-muted mb-0">All your event seat bookings are listed here.</p>
+                        </div>
+                        <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Browse Events</a>
                     </div>
-                    <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Browse Events</a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr>
-                                <th>Event</th>
-                                <th>Category</th>
-                                <th>Seats</th>
-                                <th>Status</th>
-                                <th>Booked On</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for booking in booking_history %}
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <a href="{% url 'events:event-detail' booking.event.pk %}" class="text-decoration-none fw-semibold">
-                                            {{ booking.event.title }}
-                                        </a>
-                                        <div class="small text-muted">{{ booking.event.start_date|date:"M d, Y" }}</div>
-                                    </td>
-                                    <td>{{ booking.event.category.name }}</td>
-                                    <td>{{ booking.seat_count }}</td>
-                                    <td>
-                                        <span class="badge {% if booking.status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
-                                            {{ booking.get_status_display }}
-                                        </span>
-                                        {% if booking.cancelled_seat_count %}
-                                            <div class="small text-muted mt-1">
-                                                Cancelled: {{ booking.cancelled_seat_count }}
+                                    <th>Event</th>
+                                    <th>Category</th>
+                                    <th>Seats</th>
+                                    <th>Status</th>
+                                    <th>Booked On</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in booking_history %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'events:event-detail' booking.event.pk %}" class="text-decoration-none fw-semibold">
+                                                {{ booking.event.title }}
+                                            </a>
+                                            <div class="small text-muted">{{ booking.event.start_date|date:"M d, Y" }}</div>
+                                        </td>
+                                        <td>{{ booking.event.category.name }}</td>
+                                        <td>{{ booking.seat_count }}</td>
+                                        <td>
+                                            <span class="badge {% if booking.status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                                                {{ booking.get_status_display }}
+                                            </span>
+                                            {% if booking.cancelled_seat_count %}
+                                                <div class="small text-muted mt-1">
+                                                    Cancelled: {{ booking.cancelled_seat_count }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ booking.registered_at|date:"M d, Y h:i A" }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4">No bookings yet.</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                        <div>
+                            <h2 class="h4 mb-1">{% if profile_role == 'admin' %}Admin Control Hub{% else %}Organizer Workspace{% endif %}</h2>
+                            <p class="text-muted mb-0">
+                                {% if profile_role == 'admin' %}
+                                    Jump into platform management, exports, and event oversight from here.
+                                {% else %}
+                                    Keep track of your event pipeline and jump back into management quickly.
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'dashboard:dashboard-home' %}" class="btn btn-brand">Open Dashboard</a>
+                            <a href="{% url 'events:event-create' %}" class="btn btn-outline-secondary">Create Event</a>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="rounded-4 border bg-light p-3 h-100">
+                                <div class="small text-uppercase text-muted mb-1">Managed Events</div>
+                                <div class="h3 mb-0">{{ managed_events_count }}</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="rounded-4 border bg-light p-3 h-100">
+                                <div class="small text-uppercase text-muted mb-1">Upcoming</div>
+                                <div class="h3 mb-0">{{ upcoming_managed_events }}</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="rounded-4 border bg-light p-3 h-100">
+                                <div class="small text-uppercase text-muted mb-1">Confirmed Seats</div>
+                                <div class="h3 mb-0">{{ managed_confirmed_seats }}</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="rounded-4 border bg-light p-3 h-100">
+                                <div class="small text-uppercase text-muted mb-1">Est. Revenue</div>
+                                <div class="h3 mb-0">Rs. {{ managed_estimated_revenue }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-lg-7">
+                            <h3 class="h5 mb-3">Next Events to Manage</h3>
+                            {% for event in managed_events_preview %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                        <div>
+                                            <div class="fw-semibold">{{ event.title }}</div>
+                                            <div class="small text-muted">
+                                                {{ event.start_date|date:"M d, Y" }} at {{ event.start_time|time:"h:i A" }} in {{ event.city }}
                                             </div>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ booking.registered_at|date:"M d, Y h:i A" }}</td>
-                                </tr>
+                                            <div class="small text-muted mt-1">
+                                                {{ event.available_seats }} seat{{ event.available_seats|pluralize }} available
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <a href="{% url 'events:event-detail' event.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                            <a href="{% url 'events:event-update' event.pk %}" class="btn btn-sm btn-brand">Edit</a>
+                                        </div>
+                                    </div>
+                                </div>
                             {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">No bookings yet.</td>
-                                </tr>
+                                <div class="border rounded-4 p-4 text-muted">
+                                    {% if profile_role == 'admin' %}
+                                        No events are available to manage yet.
+                                    {% else %}
+                                        You have not created any events yet.
+                                    {% endif %}
+                                </div>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <h3 class="h5 mb-3">Quick Actions</h3>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'events:event-list' %}?sort=recent" class="btn btn-outline-secondary text-start">Browse latest events</a>
+                                <a href="{% url 'events:event-list' %}?timing=upcoming" class="btn btn-outline-secondary text-start">Review upcoming events</a>
+                                {% if profile_role == 'admin' %}
+                                    <a href="{% url 'dashboard:export-registrations' %}" class="btn btn-outline-secondary text-start">Export registrations CSV</a>
+                                {% endif %}
+                            </div>
+                            <div class="rounded-4 border bg-light p-3 mt-3">
+                                <div class="small text-uppercase text-muted mb-1">Past Events</div>
+                                <div class="h4 mb-0">{{ past_managed_events }}</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

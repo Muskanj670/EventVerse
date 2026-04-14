@@ -3,7 +3,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
 from django.http import JsonResponse
+from django.db.models import Sum
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, TemplateView
 
@@ -11,6 +13,7 @@ from .forms import CustomAuthenticationForm, SignupForm
 from .models import VerificationOTP
 from .utils import (
     create_signup_otp,
+    get_user_role,
     get_valid_otp,
     mark_otp_verified,
     normalize_email,
@@ -111,12 +114,44 @@ class ProfileView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        registrations = (
-            self.request.user.registrations.select_related('event', 'event__category')
-            .order_by('-registered_at')
-        )
+        role = get_user_role(self.request.user)
+        can_view_booking_history = role == 'attendee'
+        registrations = Registration.objects.none()
+        managed_events = []
+
+        if can_view_booking_history:
+            registrations = (
+                self.request.user.registrations.select_related('event', 'event__category')
+                .order_by('-registered_at')
+            )
+        else:
+            event_queryset = self.request.user.organized_events.select_related('category').order_by('start_date', 'start_time')
+            if role == 'admin':
+                event_queryset = event_queryset.model.objects.select_related('category', 'organizer').order_by(
+                    'start_date', 'start_time'
+                )
+
+            now = timezone.now()
+            managed_events = list(event_queryset[:3])
+            managed_registrations = Registration.objects.filter(event__in=event_queryset)
+            confirmed_registrations = managed_registrations.filter(status=Registration.Status.CONFIRMED)
+            estimated_revenue = sum(
+                (registration.event.price * registration.seat_count for registration in confirmed_registrations),
+                0,
+            )
+            context['managed_events_count'] = event_queryset.count()
+            context['upcoming_managed_events'] = sum(1 for event in event_queryset if event.end_datetime >= now)
+            context['past_managed_events'] = sum(1 for event in event_queryset if event.end_datetime < now)
+            context['managed_confirmed_seats'] = (
+                confirmed_registrations.aggregate(total=Sum('seat_count'))['total'] or 0
+            )
+            context['managed_estimated_revenue'] = estimated_revenue
+
         context['profile'] = self.request.user.profile
+        context['profile_role'] = role
+        context['can_view_booking_history'] = can_view_booking_history
         context['booking_history'] = registrations
+        context['managed_events_preview'] = managed_events
         context['total_booked_seats'] = sum(
             registration.seat_count
             for registration in registrations

@@ -49,6 +49,69 @@ class ProfileViewTests(TestCase):
         self.assertContains(response, 'Startup Circle')
         self.assertContains(response, '2')
 
+    def test_organizer_profile_hides_booking_history(self):
+        organizer = User.objects.create_user(username='organizer', password='pass12345')
+        organizer.profile.role = 'organizer'
+        organizer.profile.save()
+
+        self.client.login(username='organizer', password='pass12345')
+        response = self.client.get(reverse('accounts:profile'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Booking History')
+        self.assertContains(response, 'Organizer Workspace')
+        self.assertContains(response, 'Open Dashboard')
+        self.assertContains(response, 'Quick Actions')
+
+    def test_admin_profile_hides_booking_history(self):
+        admin = User.objects.create_user(username='adminuser', password='pass12345', is_staff=True)
+
+        self.client.login(username='adminuser', password='pass12345')
+        response = self.client.get(reverse('accounts:profile'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Booking History')
+        self.assertContains(response, 'Admin Control Hub')
+        self.assertContains(response, 'Export registrations CSV')
+
+    def test_organizer_profile_shows_management_stats(self):
+        organizer = User.objects.create_user(username='host', password='pass12345')
+        organizer.profile.role = 'organizer'
+        organizer.profile.save()
+        attendee = User.objects.create_user(username='guest', password='pass12345')
+        category, _ = Category.objects.get_or_create(name='Tech')
+        event_date = timezone.localdate() + timedelta(days=4)
+        event = Event.objects.create(
+            title='Creator Meetup',
+            description='Meet local creators.',
+            category=category,
+            organizer=organizer,
+            venue='Studio Hall',
+            city='Pune',
+            start_date=event_date,
+            end_date=event_date,
+            start_time=time(11, 0),
+            end_time=time(13, 0),
+            capacity=20,
+            price='250.00',
+            status=Event.Status.PUBLISHED,
+        )
+        Registration.objects.create(
+            user=attendee,
+            event=event,
+            ticket=event.tickets.first(),
+            seat_count=3,
+            status=Registration.Status.CONFIRMED,
+        )
+
+        self.client.login(username='host', password='pass12345')
+        response = self.client.get(reverse('accounts:profile'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Managed Events')
+        self.assertContains(response, 'Creator Meetup')
+        self.assertContains(response, 'Rs. 750.00')
+
     def test_signup_requires_verified_email_and_phone_otps(self):
         response = self.client.post(
             reverse('accounts:signup'),
