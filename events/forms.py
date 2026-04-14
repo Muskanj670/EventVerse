@@ -192,5 +192,21 @@ class BookingForm(forms.Form):
         if not created:
             registration.seat_count += self.cleaned_data['seat_count']
             registration.status = Registration.Status.CONFIRMED
-            registration.save(update_fields=['seat_count', 'status'])
+            registration.cancelled_at = None
+            registration.save(update_fields=['seat_count', 'status', 'cancelled_at'])
         return registration
+
+
+class BookingCancellationForm(forms.Form):
+    seat_count = forms.IntegerField(min_value=1, label='Seats to cancel')
+
+    def __init__(self, *args, registration=None, **kwargs):
+        self.registration = registration
+        super().__init__(*args, **kwargs)
+        self.fields['seat_count'].widget.attrs.update({'class': 'form-control', 'min': 1})
+
+    def clean_seat_count(self):
+        seat_count = self.cleaned_data['seat_count']
+        if self.registration and seat_count > self.registration.seat_count:
+            raise forms.ValidationError('You cannot cancel more seats than you have booked.')
+        return seat_count

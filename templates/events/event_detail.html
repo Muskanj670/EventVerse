@@ -83,8 +83,38 @@
                 {% endif %}
                 {% if user_registration %}
                     <div class="alert alert-success mt-4 mb-0">
-                        You have booked {{ user_registration.seat_count }} seat{{ user_registration.seat_count|pluralize }} for this event.
+                        {% if user_registration.status == 'confirmed' %}
+                            You have booked {{ user_registration.seat_count }} seat{{ user_registration.seat_count|pluralize }} for this event.
+                        {% else %}
+                            Your booking for this event is currently {{ user_registration.get_status_display|lower }}.
+                        {% endif %}
+                        {% if user_registration.cancelled_seat_count %}
+                            <div class="small mt-2">
+                                Cancelled so far: {{ user_registration.cancelled_seat_count }} seat{{ user_registration.cancelled_seat_count|pluralize }}.
+                            </div>
+                        {% endif %}
                     </div>
+                    {% if user_registration.status == 'confirmed' %}
+                        <div class="d-grid gap-2 mt-3">
+                            <form method="post" action="{% url 'events:event-reminders' event.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-secondary w-100">
+                                    {% if user_registration.reminder_enabled %}Disable{% else %}Enable{% endif %} Event Reminders
+                                </button>
+                            </form>
+                            {% if can_cancel_booking %}
+                                <form method="post" action="{% url 'events:event-cancel' event.pk %}">
+                                    {% csrf_token %}
+                                    <div class="mb-2">
+                                        <label class="form-label" for="{{ cancellation_form.seat_count.id_for_label }}">{{ cancellation_form.seat_count.label }}</label>
+                                        {{ cancellation_form.seat_count }}
+                                        <div class="form-text">You can cancel up to {{ user_registration.seat_count }} seat{{ user_registration.seat_count|pluralize }} from this booking.</div>
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-danger w-100">Cancel Ticket</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    {% endif %}
                 {% endif %}
                 {% if can_book %}
                     <hr>

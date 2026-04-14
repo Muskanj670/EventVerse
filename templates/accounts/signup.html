@@ -14,8 +14,17 @@
                         <div class="mb-3">
                             <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                             {{ field }}
+                            {% if field.name == 'username' %}
+                                <div id="usernameValidationMessage" class="small mt-1"></div>
+                            {% endif %}
                             {% if field.name == 'email' %}
                                 <div id="emailValidationMessage" class="small mt-1"></div>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="sendEmailOtpBtn">Send Email OTP</button>
+                                    <input type="text" class="form-control form-control-sm" id="emailOtpInput" placeholder="Enter email OTP">
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="verifyEmailOtpBtn">Verify Email</button>
+                                </div>
+                                <div id="emailOtpMessage" class="small mt-1"></div>
                             {% endif %}
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text|safe }}</div>
@@ -25,7 +34,7 @@
                             {% endfor %}
                         </div>
                     {% endfor %}
-                    <button type="submit" class="btn btn-brand w-100">Signup</button>
+                    <button type="submit" class="btn btn-brand w-100" id="signupSubmitBtn" disabled>Signup</button>
                 </form>
                 <p class="mt-3 mb-0">Already have an account? <a href="{% url 'accounts:login' %}">Login here</a></p>
             </div>
@@ -36,13 +45,68 @@
 
 {% block extra_js %}
 <script>
+    const usernameInput = document.getElementById('id_username');
+    const usernameMessage = document.getElementById('usernameValidationMessage');
     const emailInput = document.getElementById('id_email');
     const emailMessage = document.getElementById('emailValidationMessage');
+    const emailOtpMessage = document.getElementById('emailOtpMessage');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    const signupSubmitBtn = document.getElementById('signupSubmitBtn');
+    let usernameAvailable = false;
+    let emailVerified = false;
+    let usernameTimer;
     let emailTimer;
 
     function setEmailMessage(message, statusClass) {
         emailMessage.textContent = message;
         emailMessage.className = `small mt-1 ${statusClass}`;
+    }
+
+    function setStatusMessage(element, message, statusClass) {
+        element.textContent = message;
+        element.className = `small mt-1 ${statusClass}`;
+    }
+
+    function refreshSignupButton() {
+        if (signupSubmitBtn) {
+            signupSubmitBtn.disabled = !(emailVerified && usernameAvailable);
+        }
+    }
+
+    async function postForm(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+            },
+            body: new URLSearchParams(payload),
+        });
+        const data = await response.json();
+        return { ok: response.ok, data };
+    }
+
+    if (usernameInput && usernameMessage) {
+        usernameInput.addEventListener('input', function () {
+            clearTimeout(usernameTimer);
+            const username = usernameInput.value.trim();
+
+            if (!username) {
+                setStatusMessage(usernameMessage, '', '');
+                usernameAvailable = false;
+                refreshSignupButton();
+                return;
+            }
+
+            setStatusMessage(usernameMessage, 'Checking username availability...', 'text-muted');
+            usernameTimer = setTimeout(async () => {
+                const response = await fetch(`{% url 'accounts:validate-username' %}?username=${encodeURIComponent(username)}`);
+                const data = await response.json();
+                setStatusMessage(usernameMessage, data.message, data.available ? 'text-success' : 'text-danger');
+                usernameAvailable = !!data.available;
+                refreshSignupButton();
+            }, 350);
+        });
     }
 
     if (emailInput && emailMessage) {
@@ -52,6 +116,8 @@
 
             if (!email) {
                 setEmailMessage('', '');
+                emailVerified = false;
+                refreshSignupButton();
                 return;
             }
 
@@ -60,8 +126,28 @@
                 const response = await fetch(`{% url 'accounts:validate-email' %}?email=${encodeURIComponent(email)}`);
                 const data = await response.json();
                 setEmailMessage(data.message, data.available ? 'text-success' : 'text-danger');
+                emailVerified = false;
+                setStatusMessage(emailOtpMessage, 'Email changed. Please verify the new email address.', 'text-muted');
+                refreshSignupButton();
             }, 350);
         });
     }
+
+    document.getElementById('sendEmailOtpBtn')?.addEventListener('click', async function () {
+        const { ok, data } = await postForm(`{% url 'accounts:send-email-otp' %}`, { email: emailInput.value.trim() });
+        setStatusMessage(emailOtpMessage, data.message, ok ? 'text-success' : 'text-danger');
+        emailVerified = false;
+        refreshSignupButton();
+    });
+
+    document.getElementById('verifyEmailOtpBtn')?.addEventListener('click', async function () {
+        const { ok, data } = await postForm(`{% url 'accounts:verify-email-otp' %}`, {
+            email: emailInput.value.trim(),
+            code: document.getElementById('emailOtpInput').value.trim(),
+        });
+        setStatusMessage(emailOtpMessage, data.message, ok ? 'text-success' : 'text-danger');
+        emailVerified = ok;
+        refreshSignupButton();
+    });
 </script>
 {% endblock %}

@@ -161,7 +161,11 @@ class Registration(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='registrations')
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='registrations')
     seat_count = models.PositiveIntegerField(default=1)
+    cancelled_seat_count = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reminder_enabled = models.BooleanField(default=True)
+    reminder_sent_at = models.DateTimeField(blank=True, null=True)
+    cancelled_at = models.DateTimeField(blank=True, null=True)
     registered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

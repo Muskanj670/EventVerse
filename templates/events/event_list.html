@@ -34,11 +34,18 @@
                 <input type="text" class="form-control" id="city" name="city" value="{{ selected_city }}" placeholder="City">
             </div>
             <div class="col-md-2">
-                <label class="form-label" for="status">Status</label>
-                <select class="form-select" id="status" name="status">
-                    <option value="">All</option>
-                    {% for value, label in event_statuses %}
-                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                <label class="form-label" for="timing">When</label>
+                <select class="form-select" id="timing" name="timing">
+                    <option value="">All events</option>
+                    <option value="upcoming" {% if selected_timing == 'upcoming' %}selected{% endif %}>Upcoming</option>
+                    <option value="past" {% if selected_timing == 'past' %}selected{% endif %}>Past</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="sort">Sort by</label>
+                <select class="form-select" id="sort" name="sort">
+                    {% for value, label in sort_options %}
+                        <option value="{{ value }}" {% if selected_sort == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>

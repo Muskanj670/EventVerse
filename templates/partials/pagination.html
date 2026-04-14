@@ -3,7 +3,7 @@
         <ul class="pagination justify-content-center">
             {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Previous</a>
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.city %}&city={{ request.GET.city }}{% endif %}{% if request.GET.timing %}&timing={{ request.GET.timing }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">Previous</a>
                 </li>
             {% else %}
                 <li class="page-item disabled"><span class="page-link">Previous</span></li>
@@ -12,12 +12,12 @@
                 {% if page_obj.number == num %}
                     <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                 {% else %}
-                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">{{ num }}</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.city %}&city={{ request.GET.city }}{% endif %}{% if request.GET.timing %}&timing={{ request.GET.timing }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">{{ num }}</a></li>
                 {% endif %}
             {% endfor %}
             {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Next</a>
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.city %}&city={{ request.GET.city }}{% endif %}{% if request.GET.timing %}&timing={{ request.GET.timing }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">Next</a>
                 </li>
             {% else %}
                 <li class="page-item disabled"><span class="page-link">Next</span></li>

@@ -8,6 +8,15 @@ from django.views import View
 from django.views.generic import CreateView, TemplateView
 
 from .forms import CustomAuthenticationForm, SignupForm
+from .models import VerificationOTP
+from .utils import (
+    create_signup_otp,
+    get_valid_otp,
+    mark_otp_verified,
+    normalize_email,
+    send_email_otp,
+)
+from events.models import Registration
 
 
 class SignupView(CreateView):
@@ -15,9 +24,14 @@ class SignupView(CreateView):
     template_name = 'accounts/signup.html'
     success_url = reverse_lazy('accounts:login')
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request
+        return kwargs
+
     def form_valid(self, form):
         response = super().form_valid(form)
-        messages.success(self.request, 'Your account has been created successfully. Please log in.')
+        messages.success(self.request, 'Your account has been created successfully. You can now log in.')
         return response
 
 
@@ -42,7 +56,7 @@ class CustomLogoutView(LogoutView):
 
 class EmailValidationView(View):
     def get(self, request, *args, **kwargs):
-        email = request.GET.get('email', '').strip().lower()
+        email = normalize_email(request.GET.get('email', ''))
         if not email:
             return JsonResponse({'valid': False, 'available': False, 'message': 'Email is required.'})
 
@@ -50,6 +64,46 @@ class EmailValidationView(View):
         if exists:
             return JsonResponse({'valid': True, 'available': False, 'message': 'This email is already in use.'})
         return JsonResponse({'valid': True, 'available': True, 'message': 'Email is available.'})
+
+
+class UsernameValidationView(View):
+    def get(self, request, *args, **kwargs):
+        username = request.GET.get('username', '').strip()
+        if not username:
+            return JsonResponse({'valid': False, 'available': False, 'message': 'Username is required.'})
+        if len(username) < 3:
+            return JsonResponse(
+                {'valid': False, 'available': False, 'message': 'Username must be at least 3 characters long.'}
+            )
+
+        exists = User.objects.filter(username__iexact=username).exists()
+        if exists:
+            return JsonResponse({'valid': True, 'available': False, 'message': 'This username is already taken.'})
+        return JsonResponse({'valid': True, 'available': True, 'message': 'Username is available.'})
+
+
+class SendEmailOTPView(View):
+    def post(self, request, *args, **kwargs):
+        email = normalize_email(request.POST.get('email', ''))
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email is required.'}, status=400)
+        if User.objects.filter(email__iexact=email).exists():
+            return JsonResponse({'success': False, 'message': 'This email is already in use.'}, status=400)
+
+        otp = create_signup_otp(email, VerificationOTP.Channel.EMAIL, VerificationOTP.Purpose.SIGNUP_EMAIL)
+        send_email_otp(email, otp.code)
+        return JsonResponse({'success': True, 'message': 'Email OTP sent successfully.'})
+
+
+class VerifyEmailOTPView(View):
+    def post(self, request, *args, **kwargs):
+        email = normalize_email(request.POST.get('email', ''))
+        code = request.POST.get('code', '').strip()
+        otp = get_valid_otp(email, VerificationOTP.Channel.EMAIL, VerificationOTP.Purpose.SIGNUP_EMAIL, code)
+        if not otp:
+            return JsonResponse({'success': False, 'message': 'Invalid or expired email OTP.'}, status=400)
+        mark_otp_verified(otp)
+        return JsonResponse({'success': True, 'message': 'Email verified successfully.'})
 
 
 class ProfileView(LoginRequiredMixin, TemplateView):
@@ -63,5 +117,10 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         )
         context['profile'] = self.request.user.profile
         context['booking_history'] = registrations
-        context['total_booked_seats'] = sum(registration.seat_count for registration in registrations)
+        context['total_booked_seats'] = sum(
+            registration.seat_count
+            for registration in registrations
+            if registration.status == Registration.Status.CONFIRMED
+        )
+        context['total_cancelled_seats'] = sum(registration.cancelled_seat_count for registration in registrations)
         return context

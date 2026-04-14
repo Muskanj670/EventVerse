@@ -95,13 +95,21 @@ python manage.py migrate
 python manage.py createsuperuser
 ```
 
-5. Start the development server:
+5. Configure email once so OTP and booking emails work on every run:
+
+```bash
+copy .env.example .env
+```
+
+Update `.env` with your real SMTP credentials. For Gmail, use an App Password, not your normal account password.
+
+6. Start the development server:
 
 ```bash
 python manage.py runserver
 ```
 
-6. Open `http://127.0.0.1:8000/`
+7. Open `http://127.0.0.1:8000/`
 
 ## Test Suite
 
@@ -116,3 +124,4 @@ python manage.py test
 - Media uploads are served through Django in development when `DEBUG=True`.
 - Published events are visible to attendees; organizers/admins can also manage draft, cancelled, and completed events.
 - Existing single-image events still render correctly, while newly uploaded image/video sets appear as a carousel.
+- Email settings are loaded automatically from `.env` at startup, so you do not need to re-export them each time you run the project.

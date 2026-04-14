@@ -1,10 +1,12 @@
 from datetime import time, timedelta
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from accounts.models import VerificationOTP
 from events.models import Category, Event, Registration
 
 
@@ -46,3 +48,71 @@ class ProfileViewTests(TestCase):
         self.assertContains(response, 'Booking History')
         self.assertContains(response, 'Startup Circle')
         self.assertContains(response, '2')
+
+    def test_signup_requires_verified_email_and_phone_otps(self):
+        response = self.client.post(
+            reverse('accounts:signup'),
+            {
+                'username': 'newuser',
+                'email': 'newuser@example.com',
+                'role': 'attendee',
+                'phone': '9876543210',
+                'city': 'Jaipur',
+                'password1': 'StrongPass123',
+                'password2': 'StrongPass123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Verify your email with OTP before signing up.')
+
+    def test_signup_succeeds_after_verified_email_otp(self):
+        self.client.post(reverse('accounts:send-email-otp'), {'email': 'newuser@example.com'})
+        email_otp = VerificationOTP.objects.get(
+            target='newuser@example.com',
+            purpose=VerificationOTP.Purpose.SIGNUP_EMAIL,
+        )
+        self.client.post(
+            reverse('accounts:verify-email-otp'),
+            {'email': 'newuser@example.com', 'code': email_otp.code},
+        )
+
+        response = self.client.post(
+            reverse('accounts:signup'),
+            {
+                'username': 'newuser',
+                'email': 'newuser@example.com',
+                'role': 'attendee',
+                'phone': '9876543210',
+                'city': 'Jaipur',
+                'password1': 'StrongPass123',
+                'password2': 'StrongPass123',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(User.objects.filter(username='newuser').exists())
+        created_user = User.objects.get(username='newuser')
+        self.assertTrue(created_user.profile.email_verified)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Your EventVerse email OTP', mail.outbox[0].subject)
+
+    def test_send_email_otp_does_not_expose_code_in_response(self):
+        response = self.client.post(reverse('accounts:send-email-otp'), {'email': 'hiddenotp@example.com'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn('debug_otp', payload)
+        self.assertNotIn('Dev OTP', payload['message'])
+
+    def test_validate_username_reports_availability_in_realtime(self):
+        User.objects.create_user(username='existinguser', password='pass12345')
+
+        taken_response = self.client.get(reverse('accounts:validate-username'), {'username': 'existinguser'})
+        available_response = self.client.get(reverse('accounts:validate-username'), {'username': 'freshuser'})
+
+        self.assertEqual(taken_response.status_code, 200)
+        self.assertFalse(taken_response.json()['available'])
+        self.assertEqual(available_response.status_code, 200)
+        self.assertTrue(available_response.json()['available'])

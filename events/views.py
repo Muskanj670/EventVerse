@@ -1,29 +1,60 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db.models import Q
+from django.db.models import IntegerField, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
-from accounts.utils import get_user_role, is_organizer_or_admin
+from accounts.utils import (
+    get_user_role,
+    is_organizer_or_admin,
+    send_booking_notifications,
+    send_cancellation_notifications,
+)
 
-from .forms import BookingForm, EventForm
-from .models import Category, Event
+from .forms import BookingCancellationForm, BookingForm, EventForm
+from .models import Category, Event, Registration
 
 
 class EventListView(ListView):
+    SORT_OPTIONS = (
+        ('schedule', 'Event date'),
+        ('recent', 'Recently uploaded'),
+        ('popular', 'Highest bookings'),
+        ('title_asc', 'Alphabetical (A-Z)'),
+        ('title_desc', 'Alphabetical (Z-A)'),
+        ('price_low', 'Price: Low to High'),
+        ('price_high', 'Price: High to Low'),
+    )
+
     model = Event
     template_name = 'events/event_list.html'
     context_object_name = 'events'
     paginate_by = 6
 
     def get_queryset(self):
-        queryset = Event.objects.select_related('organizer', 'category').prefetch_related('media_assets')
+        queryset = (
+            Event.objects.select_related('organizer', 'category')
+            .prefetch_related('media_assets')
+            .annotate(
+                confirmed_bookings=Coalesce(
+                    Sum(
+                        'registrations__seat_count',
+                        filter=Q(registrations__status=Registration.Status.CONFIRMED),
+                    ),
+                    Value(0),
+                    output_field=IntegerField(),
+                )
+            )
+        )
         category = self.request.GET.get('category')
         query = self.request.GET.get('q')
         city = self.request.GET.get('city')
-        status = self.request.GET.get('status')
+        timing = self.request.GET.get('timing')
+        sort = self.request.GET.get('sort', 'schedule')
+        now = timezone.localtime()
 
         if not is_organizer_or_admin(self.request.user):
             queryset = queryset.filter(status=Event.Status.PUBLISHED)
@@ -34,8 +65,23 @@ class EventListView(ListView):
             queryset = queryset.filter(Q(title__icontains=query) | Q(description__icontains=query))
         if city:
             queryset = queryset.filter(city__icontains=city)
-        if status:
-            queryset = queryset.filter(status=status)
+
+        past_filter = Q(end_date__lt=now.date()) | Q(end_date=now.date(), end_time__lt=now.time())
+        if timing == 'upcoming':
+            queryset = queryset.exclude(past_filter)
+        elif timing == 'past':
+            queryset = queryset.filter(past_filter)
+
+        sort_map = {
+            'recent': ('-created_at', '-id'),
+            'popular': ('-confirmed_bookings', 'start_date', 'start_time', 'title'),
+            'title_asc': ('title',),
+            'title_desc': ('-title',),
+            'price_low': ('price', 'start_date', 'start_time', 'title'),
+            'price_high': ('-price', 'start_date', 'start_time', 'title'),
+            'schedule': ('start_date', 'start_time', '-created_at'),
+        }
+        queryset = queryset.order_by(*sort_map.get(sort, sort_map['schedule']))
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -44,8 +90,9 @@ class EventListView(ListView):
         context['selected_category'] = self.request.GET.get('category', '')
         context['search_query'] = self.request.GET.get('q', '')
         context['selected_city'] = self.request.GET.get('city', '')
-        context['selected_status'] = self.request.GET.get('status', '')
-        context['event_statuses'] = Event.Status.choices
+        context['selected_timing'] = self.request.GET.get('timing', '')
+        context['selected_sort'] = self.request.GET.get('sort', 'schedule')
+        context['sort_options'] = self.SORT_OPTIONS
         return context
 
 
@@ -77,6 +124,12 @@ class EventDetailView(DetailView):
         )
         context['user_registration'] = (
             event.registrations.filter(user=self.request.user).first() if self.request.user.is_authenticated else None
+        )
+        context['cancellation_form'] = BookingCancellationForm(registration=context['user_registration'])
+        context['can_cancel_booking'] = (
+            context['user_registration']
+            and context['user_registration'].status == Registration.Status.CONFIRMED
+            and event.end_datetime >= timezone.now()
         )
         return context
 
@@ -153,12 +206,97 @@ def book_event_seats(request, pk):
     form = BookingForm(request.POST, event=event)
     if form.is_valid():
         registration = form.save(request.user)
+        notification_status = send_booking_notifications(request.user, event, registration)
+        confirmation_text = 'email' if notification_status['email_sent'] else 'onscreen message'
         messages.success(
             request,
-            f'{registration.seat_count} seat(s) booked successfully for {event.title}.',
+            f'{registration.seat_count} seat(s) booked successfully for {event.title}. Confirmation sent via {confirmation_text}.',
         )
     else:
         for error in form.errors.get('seat_count', []):
             messages.error(request, error)
+
+    return redirect('events:event-detail', pk=event.pk)
+
+
+def cancel_event_booking(request, pk):
+    event = get_object_or_404(Event.objects.select_related('organizer'), pk=pk)
+
+    if not request.user.is_authenticated:
+        messages.error(request, 'Please log in to manage your booking.')
+        return redirect('accounts:login')
+
+    if request.method != 'POST':
+        return redirect('events:event-detail', pk=event.pk)
+
+    registration = event.registrations.filter(user=request.user).first()
+    if not registration or registration.status != Registration.Status.CONFIRMED:
+        messages.error(request, 'No active booking found to cancel.')
+        return redirect('events:event-detail', pk=event.pk)
+
+    cancellation_data = request.POST.copy()
+    if not cancellation_data.get('seat_count'):
+        cancellation_data['seat_count'] = str(registration.seat_count)
+
+    form = BookingCancellationForm(cancellation_data, registration=registration)
+    if not form.is_valid():
+        for error in form.errors.get('seat_count', []):
+            messages.error(request, error)
+        return redirect('events:event-detail', pk=event.pk)
+
+    cancelled_seats = form.cleaned_data['seat_count']
+    registration.seat_count -= cancelled_seats
+    registration.cancelled_seat_count += cancelled_seats
+    registration.cancelled_at = timezone.now()
+    registration.reminder_enabled = registration.seat_count > 0 and registration.reminder_enabled
+    if registration.seat_count == 0:
+        registration.status = Registration.Status.CANCELLED
+        registration.reminder_enabled = False
+    registration.save(update_fields=['seat_count', 'cancelled_seat_count', 'status', 'cancelled_at', 'reminder_enabled'])
+
+    notification_status = send_cancellation_notifications(
+        request.user,
+        event,
+        registration,
+        cancelled_seats=cancelled_seats,
+    )
+    if notification_status['attendee_email_sent'] or notification_status['organizer_email_sent']:
+        if registration.status == Registration.Status.CANCELLED:
+            messages.success(request, 'Your booking has been cancelled and an email notice has been sent.')
+        else:
+            messages.success(request, f'{cancelled_seats} seat(s) have been cancelled and an email notice has been sent.')
+    else:
+        if registration.status == Registration.Status.CANCELLED:
+            messages.success(request, 'Your booking has been cancelled successfully.')
+        else:
+            messages.success(request, f'{cancelled_seats} seat(s) have been cancelled successfully.')
+
+    return redirect('events:event-detail', pk=event.pk)
+
+
+def toggle_event_reminders(request, pk):
+    event = get_object_or_404(Event, pk=pk)
+
+    if not request.user.is_authenticated:
+        messages.error(request, 'Please log in to manage reminders.')
+        return redirect('accounts:login')
+
+    if request.method != 'POST':
+        return redirect('events:event-detail', pk=event.pk)
+
+    registration = event.registrations.filter(user=request.user, status=Registration.Status.CONFIRMED).first()
+    if not registration:
+        messages.error(request, 'You need a confirmed booking to manage reminders.')
+        return redirect('events:event-detail', pk=event.pk)
+
+    registration.reminder_enabled = not registration.reminder_enabled
+    if registration.reminder_enabled:
+        registration.reminder_sent_at = None
+    registration.save(update_fields=['reminder_enabled', 'reminder_sent_at'])
+
+    if registration.reminder_enabled:
+        messages.success(request, 'Event reminders have been enabled for this booking.')
+    else:
+        messages.info(request, 'Event reminders have been disabled for this booking.')
 
     return redirect('events:event-detail', pk=event.pk)
