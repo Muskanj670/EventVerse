@@ -18,6 +18,12 @@ class EventBookingTests(TestCase):
         self.attendee = User.objects.create_user(username='attendee', password='pass12345')
         self.organizer.profile.role = UserProfile.Role.ORGANIZER
         self.organizer.profile.save()
+        self.attendee.email = 'attendee@example.com'
+        self.attendee.save(update_fields=['email'])
+        self.attendee.profile.email_verified = True
+        self.attendee.profile.phone = '+919876543210'
+        self.attendee.profile.city = 'Delhi'
+        self.attendee.profile.save()
 
         self.category, _ = Category.objects.get_or_create(name='Technology')
         tomorrow = timezone.localdate() + timedelta(days=1)
@@ -272,3 +278,23 @@ class EventListFilterTests(TestCase):
         events = list(response.context['events'])
         self.assertEqual(events[0], self.expensive_event)
         self.assertEqual(events[-1], self.past_event)
+
+    def test_event_list_defaults_to_recent_upload_order(self):
+        response = self.client.get(reverse('events:event-list'))
+
+        events = list(response.context['events'])
+        self.assertEqual(events[0], self.expensive_event)
+        self.assertEqual(events[1], self.past_event)
+        self.assertEqual(events[2], self.upcoming_event)
+        self.assertEqual(response.context['selected_sort'], 'recent')
+
+    def test_event_detail_navigation_respects_filtered_order(self):
+        response = self.client.get(
+            reverse('events:event-detail', args=[self.past_event.pk]),
+            {'sort': 'recent'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['previous_event'], self.expensive_event)
+        self.assertEqual(response.context['next_event'], self.upcoming_event)
+        self.assertEqual(response.context['return_querystring'], '?sort=recent')

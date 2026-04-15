@@ -12,7 +12,8 @@ class HomeView(TemplateView):
         context['featured_events'] = (
             Event.objects.select_related('organizer', 'category')
             .prefetch_related('media_assets')
-            .filter(status='published')[:6]
+            .filter(status='published')
+            .order_by('-created_at', '-id')[:6]
         )
         context['categories'] = Category.objects.all()
         return context

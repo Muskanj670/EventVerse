@@ -32,6 +32,7 @@ class VerificationOTP(models.Model):
     class Purpose(models.TextChoices):
         SIGNUP_EMAIL = 'signup_email', 'Signup Email'
         SIGNUP_PHONE = 'signup_phone', 'Signup Phone'
+        PROFILE_EMAIL = 'profile_email', 'Profile Email'
 
     target = models.CharField(max_length=255)
     channel = models.CharField(max_length=20, choices=Channel.choices)

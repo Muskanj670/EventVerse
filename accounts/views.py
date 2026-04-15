@@ -3,18 +3,20 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
 from django.http import JsonResponse
-from django.db.models import Sum
+from django.db.models import Q, Sum
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import View
-from django.views.generic import CreateView, TemplateView
+from django.views.generic import CreateView, TemplateView, UpdateView
 
-from .forms import CustomAuthenticationForm, SignupForm
+from .forms import CustomAuthenticationForm, ProfileUpdateForm, SignupForm
 from .models import VerificationOTP
 from .utils import (
     create_signup_otp,
     get_user_role,
     get_valid_otp,
+    is_profile_ready_for_booking,
     mark_otp_verified,
     normalize_email,
     send_email_otp,
@@ -109,6 +111,36 @@ class VerifyEmailOTPView(View):
         return JsonResponse({'success': True, 'message': 'Email verified successfully.'})
 
 
+class ProfileSendEmailOTPView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        email = normalize_email(request.POST.get('email', ''))
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email is required.'}, status=400)
+        if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
+            return JsonResponse({'success': False, 'message': 'This email is already in use.'}, status=400)
+
+        otp = create_signup_otp(email, VerificationOTP.Channel.EMAIL, VerificationOTP.Purpose.PROFILE_EMAIL)
+        send_email_otp(email, otp.code)
+        return JsonResponse({'success': True, 'message': 'Verification OTP sent to your email.'})
+
+
+class ProfileVerifyEmailOTPView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        email = normalize_email(request.POST.get('email', ''))
+        code = request.POST.get('code', '').strip()
+        otp = get_valid_otp(email, VerificationOTP.Channel.EMAIL, VerificationOTP.Purpose.PROFILE_EMAIL, code)
+        if not otp:
+            return JsonResponse({'success': False, 'message': 'Invalid or expired email OTP.'}, status=400)
+
+        mark_otp_verified(otp)
+        request.user.email = email
+        request.user.save(update_fields=['email'])
+        profile = request.user.profile
+        profile.email_verified = True
+        profile.save(update_fields=['email_verified'])
+        return JsonResponse({'success': True, 'message': 'Email verified successfully.'})
+
+
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = 'accounts/profile.html'
 
@@ -132,7 +164,10 @@ class ProfileView(LoginRequiredMixin, TemplateView):
                 )
 
             now = timezone.now()
-            managed_events = list(event_queryset[:3])
+            upcoming_event_queryset = event_queryset.filter(
+                Q(end_date__gt=now.date()) | Q(end_date=now.date(), end_time__gte=now.time())
+            )
+            managed_events = list(upcoming_event_queryset[:3])
             managed_registrations = Registration.objects.filter(event__in=event_queryset)
             confirmed_registrations = managed_registrations.filter(status=Registration.Status.CONFIRMED)
             estimated_revenue = sum(
@@ -140,7 +175,7 @@ class ProfileView(LoginRequiredMixin, TemplateView):
                 0,
             )
             context['managed_events_count'] = event_queryset.count()
-            context['upcoming_managed_events'] = sum(1 for event in event_queryset if event.end_datetime >= now)
+            context['upcoming_managed_events'] = upcoming_event_queryset.count()
             context['past_managed_events'] = sum(1 for event in event_queryset if event.end_datetime < now)
             context['managed_confirmed_seats'] = (
                 confirmed_registrations.aggregate(total=Sum('seat_count'))['total'] or 0
@@ -149,9 +184,11 @@ class ProfileView(LoginRequiredMixin, TemplateView):
 
         context['profile'] = self.request.user.profile
         context['profile_role'] = role
+        context['profile_role_label'] = 'Admin' if role == 'admin' else self.request.user.profile.get_role_display()
         context['can_view_booking_history'] = can_view_booking_history
         context['booking_history'] = registrations
         context['managed_events_preview'] = managed_events
+        context['can_book_events'] = is_profile_ready_for_booking(self.request.user)
         context['total_booked_seats'] = sum(
             registration.seat_count
             for registration in registrations
@@ -159,3 +196,28 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         )
         context['total_cancelled_seats'] = sum(registration.cancelled_seat_count for registration in registrations)
         return context
+
+
+class ProfileUpdateView(LoginRequiredMixin, UpdateView):
+    template_name = 'accounts/profile_edit.html'
+    form_class = ProfileUpdateForm
+    success_url = reverse_lazy('accounts:profile')
+
+    def get_object(self, queryset=None):
+        return self.request.user.profile
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        previous_email = normalize_email(self.request.user.email or '')
+        profile = form.save()
+        if normalize_email(self.request.user.email or '') != previous_email:
+            messages.info(self.request, 'Profile updated. Please verify your new email before booking events.')
+        else:
+            messages.success(self.request, 'Profile updated successfully.')
+        if profile.email_verified and not self.request.user.email:
+            messages.info(self.request, 'Add an email address to enable bookings.')
+        return redirect(self.get_success_url())

@@ -21,7 +21,7 @@
         <p class="card-text flex-grow-1">{{ event.description|truncatechars:110 }}</p>
         <div class="d-flex justify-content-between align-items-center mt-3">
             <small class="text-muted">{{ event.available_seats }} seat{{ event.available_seats|pluralize }} left</small>
-            <a href="{% url 'events:event-detail' event.pk %}" class="btn btn-sm btn-outline-dark">View Details</a>
+            <a href="{% url 'events:event-detail' event.pk %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-dark">View Details</a>
         </div>
     </div>
 </div>

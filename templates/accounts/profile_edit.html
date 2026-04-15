@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Profile | EventVerse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h1 class="h3 mb-1">Edit Profile</h1>
+                        <p class="text-muted mb-0">Keep your account details current so bookings and notifications work smoothly.</p>
+                    </div>
+                    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">Back to Profile</a>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                        {{ form.email }}
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="sendProfileEmailOtpBtn">Send Email OTP</button>
+                            <input type="text" class="form-control form-control-sm" id="profileEmailOtpInput" placeholder="Enter email OTP">
+                            <button type="button" class="btn btn-outline-success btn-sm" id="verifyProfileEmailOtpBtn">Verify Email</button>
+                        </div>
+                        <div id="profileEmailOtpMessage" class="small mt-2"></div>
+                        {% for error in form.email.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    {% for field in form.visible_fields %}
+                        {% if field.name != 'email' %}
+                            <div class="mb-3">
+                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% for error in field.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+
+                    <button type="submit" class="btn btn-brand">Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const profileEmailInput = document.getElementById('id_email');
+    const profileEmailOtpInput = document.getElementById('profileEmailOtpInput');
+    const profileEmailOtpMessage = document.getElementById('profileEmailOtpMessage');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+    function setProfileEmailMessage(message, statusClass) {
+        profileEmailOtpMessage.textContent = message;
+        profileEmailOtpMessage.className = `small mt-2 ${statusClass}`;
+    }
+
+    async function postProfileForm(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+            },
+            body: new URLSearchParams(payload),
+        });
+        const data = await response.json();
+        return { ok: response.ok, data };
+    }
+
+    profileEmailInput?.addEventListener('input', function () {
+        setProfileEmailMessage('Email changed. Please verify the updated address.', 'text-muted');
+    });
+
+    document.getElementById('sendProfileEmailOtpBtn')?.addEventListener('click', async function () {
+        const { ok, data } = await postProfileForm(`{% url 'accounts:profile-send-email-otp' %}`, {
+            email: profileEmailInput.value.trim(),
+        });
+        setProfileEmailMessage(data.message, ok ? 'text-success' : 'text-danger');
+    });
+
+    document.getElementById('verifyProfileEmailOtpBtn')?.addEventListener('click', async function () {
+        const { ok, data } = await postProfileForm(`{% url 'accounts:profile-verify-email-otp' %}`, {
+            email: profileEmailInput.value.trim(),
+            code: profileEmailOtpInput.value.trim(),
+        });
+        setProfileEmailMessage(data.message, ok ? 'text-success' : 'text-danger');
+    });
+</script>
+{% endblock %}

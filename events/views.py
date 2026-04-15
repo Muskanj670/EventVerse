@@ -9,6 +9,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from accounts.utils import (
     get_user_role,
+    is_profile_ready_for_booking,
     is_organizer_or_admin,
     send_booking_notifications,
     send_cancellation_notifications,
@@ -16,6 +17,56 @@ from accounts.utils import (
 
 from .forms import BookingCancellationForm, BookingForm, EventForm
 from .models import Category, Event, Registration
+
+
+def get_event_list_queryset(request, include_registrations=False):
+    queryset = Event.objects.select_related('organizer', 'category').prefetch_related('media_assets')
+    if include_registrations:
+        queryset = queryset.prefetch_related('registrations')
+    queryset = queryset.annotate(
+        confirmed_bookings=Coalesce(
+            Sum(
+                'registrations__seat_count',
+                filter=Q(registrations__status=Registration.Status.CONFIRMED),
+            ),
+            Value(0),
+            output_field=IntegerField(),
+        )
+    )
+
+    category = request.GET.get('category')
+    query = request.GET.get('q')
+    city = request.GET.get('city')
+    timing = request.GET.get('timing')
+    sort = request.GET.get('sort', 'recent')
+    now = timezone.localtime()
+
+    if not is_organizer_or_admin(request.user):
+        queryset = queryset.filter(status=Event.Status.PUBLISHED)
+
+    if category:
+        queryset = queryset.filter(category_id=category)
+    if query:
+        queryset = queryset.filter(Q(title__icontains=query) | Q(description__icontains=query))
+    if city:
+        queryset = queryset.filter(city__icontains=city)
+
+    past_filter = Q(end_date__lt=now.date()) | Q(end_date=now.date(), end_time__lt=now.time())
+    if timing == 'upcoming':
+        queryset = queryset.exclude(past_filter)
+    elif timing == 'past':
+        queryset = queryset.filter(past_filter)
+
+    sort_map = {
+        'recent': ('-created_at', '-id'),
+        'popular': ('-confirmed_bookings', 'start_date', 'start_time', 'title'),
+        'title_asc': ('title',),
+        'title_desc': ('-title',),
+        'price_low': ('price', 'start_date', 'start_time', 'title'),
+        'price_high': ('-price', 'start_date', 'start_time', 'title'),
+        'schedule': ('start_date', 'start_time', '-created_at'),
+    }
+    return queryset.order_by(*sort_map.get(sort, sort_map['schedule']))
 
 
 class EventListView(ListView):
@@ -35,54 +86,7 @@ class EventListView(ListView):
     paginate_by = 6
 
     def get_queryset(self):
-        queryset = (
-            Event.objects.select_related('organizer', 'category')
-            .prefetch_related('media_assets')
-            .annotate(
-                confirmed_bookings=Coalesce(
-                    Sum(
-                        'registrations__seat_count',
-                        filter=Q(registrations__status=Registration.Status.CONFIRMED),
-                    ),
-                    Value(0),
-                    output_field=IntegerField(),
-                )
-            )
-        )
-        category = self.request.GET.get('category')
-        query = self.request.GET.get('q')
-        city = self.request.GET.get('city')
-        timing = self.request.GET.get('timing')
-        sort = self.request.GET.get('sort', 'schedule')
-        now = timezone.localtime()
-
-        if not is_organizer_or_admin(self.request.user):
-            queryset = queryset.filter(status=Event.Status.PUBLISHED)
-
-        if category:
-            queryset = queryset.filter(category_id=category)
-        if query:
-            queryset = queryset.filter(Q(title__icontains=query) | Q(description__icontains=query))
-        if city:
-            queryset = queryset.filter(city__icontains=city)
-
-        past_filter = Q(end_date__lt=now.date()) | Q(end_date=now.date(), end_time__lt=now.time())
-        if timing == 'upcoming':
-            queryset = queryset.exclude(past_filter)
-        elif timing == 'past':
-            queryset = queryset.filter(past_filter)
-
-        sort_map = {
-            'recent': ('-created_at', '-id'),
-            'popular': ('-confirmed_bookings', 'start_date', 'start_time', 'title'),
-            'title_asc': ('title',),
-            'title_desc': ('-title',),
-            'price_low': ('price', 'start_date', 'start_time', 'title'),
-            'price_high': ('-price', 'start_date', 'start_time', 'title'),
-            'schedule': ('start_date', 'start_time', '-created_at'),
-        }
-        queryset = queryset.order_by(*sort_map.get(sort, sort_map['schedule']))
-        return queryset
+        return get_event_list_queryset(self.request)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -91,7 +95,7 @@ class EventListView(ListView):
         context['search_query'] = self.request.GET.get('q', '')
         context['selected_city'] = self.request.GET.get('city', '')
         context['selected_timing'] = self.request.GET.get('timing', '')
-        context['selected_sort'] = self.request.GET.get('sort', 'schedule')
+        context['selected_sort'] = self.request.GET.get('sort', 'recent')
         context['sort_options'] = self.SORT_OPTIONS
         return context
 
@@ -102,17 +106,22 @@ class EventDetailView(DetailView):
     context_object_name = 'event'
 
     def get_queryset(self):
-        queryset = (
-            Event.objects.select_related('organizer', 'category')
-            .prefetch_related('tickets', 'media_assets', 'registrations')
-        )
-        if is_organizer_or_admin(self.request.user):
-            return queryset
-        return queryset.filter(status=Event.Status.PUBLISHED)
+        return get_event_list_queryset(self.request, include_registrations=True).prefetch_related('tickets')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         event = self.object
+        querystring = self.request.GET.urlencode()
+        event_ids = list(self.get_queryset().values_list('pk', flat=True))
+        previous_event = None
+        next_event = None
+        if event.pk in event_ids:
+            event_index = event_ids.index(event.pk)
+            if event_index > 0:
+                previous_event = Event.objects.get(pk=event_ids[event_index - 1])
+            if event_index < len(event_ids) - 1:
+                next_event = Event.objects.get(pk=event_ids[event_index + 1])
+
         context['tickets'] = event.tickets.all()
         context['booking_form'] = BookingForm(event=event)
         context['can_book'] = (
@@ -121,6 +130,10 @@ class EventDetailView(DetailView):
             and event.status == Event.Status.PUBLISHED
             and event.end_datetime >= timezone.now()
             and event.available_seats > 0
+            and is_profile_ready_for_booking(self.request.user)
+        )
+        context['profile_ready_for_booking'] = (
+            is_profile_ready_for_booking(self.request.user) if self.request.user.is_authenticated else False
         )
         context['user_registration'] = (
             event.registrations.filter(user=self.request.user).first() if self.request.user.is_authenticated else None
@@ -131,6 +144,9 @@ class EventDetailView(DetailView):
             and context['user_registration'].status == Registration.Status.CONFIRMED
             and event.end_datetime >= timezone.now()
         )
+        context['previous_event'] = previous_event
+        context['next_event'] = next_event
+        context['return_querystring'] = f'?{querystring}' if querystring else ''
         return context
 
 
@@ -198,6 +214,10 @@ def book_event_seats(request, pk):
 
     if request.method != 'POST':
         return redirect('events:event-detail', pk=event.pk)
+
+    if not is_profile_ready_for_booking(request.user):
+        messages.error(request, 'Complete your profile and verify your email before booking events.')
+        return redirect('accounts:profile-edit')
 
     if event.end_datetime < timezone.now():
         messages.error(request, 'This event has already ended.')

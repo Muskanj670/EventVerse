@@ -9,7 +9,7 @@
             <div class="card-body p-4">
                 <h1 class="h3 mb-3">{{ user.username }}</h1>
                 <p class="text-muted mb-2">{{ user.email }}</p>
-                <p class="mb-2"><strong>Role:</strong> {{ profile.get_role_display }}</p>
+                <p class="mb-2"><strong>Role:</strong> {{ profile_role_label }}</p>
                 <p class="mb-2">
                     <strong>Email:</strong>
                     <span class="badge {% if profile.email_verified %}text-bg-success{% else %}text-bg-warning{% endif %}">
@@ -21,16 +21,22 @@
                 </p>
                 <p class="mb-4"><strong>City:</strong> {{ profile.city|default:'Not added' }}</p>
                 <div class="rounded-4 bg-white p-3 shadow-sm">
-                    <div class="small text-uppercase text-muted mb-1">
-                        {% if can_view_booking_history %}Total Booked Seats{% else %}Booked Seats{% endif %}
-                    </div>
-                    <div class="display-6 mb-0">{{ total_booked_seats }}</div>
+                    {% if can_view_booking_history %}
+                        <div class="small text-uppercase text-muted mb-1">Total Booked Seats</div>
+                        <div class="display-6 mb-0">{{ total_booked_seats }}</div>
+                    {% else %}
+                        <div class="small text-uppercase text-muted mb-1">Upcoming Events</div>
+                        <div class="display-6 mb-0">{{ upcoming_managed_events }}</div>
+                    {% endif %}
                 </div>
                 <div class="rounded-4 bg-white p-3 shadow-sm mt-3">
-                    <div class="small text-uppercase text-muted mb-1">
-                        {% if can_view_booking_history %}Cancelled Seats{% else %}Cancelled Bookings{% endif %}
-                    </div>
-                    <div class="display-6 mb-0">{{ total_cancelled_seats }}</div>
+                    {% if can_view_booking_history %}
+                        <div class="small text-uppercase text-muted mb-1">Cancelled Seats</div>
+                        <div class="display-6 mb-0">{{ total_cancelled_seats }}</div>
+                    {% else %}
+                        <div class="small text-uppercase text-muted mb-1">Confirmed Seats</div>
+                        <div class="display-6 mb-0">{{ managed_confirmed_seats }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -44,8 +50,18 @@
                             <h2 class="h4 mb-1">Booking History</h2>
                             <p class="text-muted mb-0">All your event seat bookings are listed here.</p>
                         </div>
-                        <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Browse Events</a>
+                        <div class="d-flex gap-2">
+                            {% if not can_book_events %}
+                                <a href="{% url 'accounts:profile-edit' %}" class="btn btn-brand">Complete Profile</a>
+                            {% endif %}
+                            <a href="{% url 'events:event-list' %}" class="btn btn-outline-secondary">Browse Events</a>
+                        </div>
                     </div>
+                    {% if not can_book_events %}
+                        <div class="alert alert-warning">
+                            Complete your profile and verify your email before booking events.
+                        </div>
+                    {% endif %}
                     <div class="table-responsive">
                         <table class="table align-middle">
                             <thead>

@@ -77,6 +77,52 @@ class CustomAuthenticationForm(AuthenticationForm):
             field.widget.attrs['class'] = f'{existing_class} form-control'.strip()
 
 
+class ProfileUpdateForm(forms.ModelForm):
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ('phone', 'city')
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user')
+        super().__init__(*args, **kwargs)
+        self.fields['email'].initial = self.user.email
+        self.fields['phone'].required = True
+        self.fields['city'].required = True
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
+    def clean_email(self):
+        email = normalize_email(self.cleaned_data['email'])
+        existing_user = User.objects.filter(email__iexact=email).exclude(pk=self.user.pk).first()
+        if existing_user:
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
+    def clean_phone(self):
+        try:
+            phone = normalize_phone_number(self.cleaned_data['phone'])
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc))
+        existing_profile = UserProfile.objects.filter(phone=phone).exclude(user=self.user).first()
+        if existing_profile:
+            raise forms.ValidationError('An account with this phone number already exists.')
+        return phone
+
+    def save(self, commit=True):
+        profile = super().save(commit=False)
+        new_email = self.cleaned_data['email']
+        email_changed = normalize_email(self.user.email or '') != new_email
+        self.user.email = new_email
+        if email_changed:
+            profile.email_verified = False
+        if commit:
+            self.user.save(update_fields=['email'])
+            profile.save()
+        return profile
+
+
 class OTPVerificationForm(forms.Form):
     target = forms.CharField(max_length=255)
     code = forms.CharField(max_length=6, min_length=6)
