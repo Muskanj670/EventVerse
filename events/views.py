@@ -18,7 +18,6 @@ from accounts.utils import (
 from .forms import BookingCancellationForm, BookingForm, EventForm
 from .models import Category, Event, Registration
 
-
 def get_event_list_queryset(request, include_registrations=False):
     queryset = Event.objects.select_related('organizer', 'category').prefetch_related('media_assets')
     if include_registrations:
@@ -68,7 +67,6 @@ def get_event_list_queryset(request, include_registrations=False):
     }
     return queryset.order_by(*sort_map.get(sort, sort_map['schedule']))
 
-
 class EventListView(ListView):
     SORT_OPTIONS = (
         ('schedule', 'Event date'),
@@ -98,7 +96,6 @@ class EventListView(ListView):
         context['selected_sort'] = self.request.GET.get('sort', 'recent')
         context['sort_options'] = self.SORT_OPTIONS
         return context
-
 
 class EventDetailView(DetailView):
     model = Event
@@ -149,7 +146,6 @@ class EventDetailView(DetailView):
         context['return_querystring'] = f'?{querystring}' if querystring else ''
         return context
 
-
 class EventOwnerMixin(UserPassesTestMixin):
     def test_func(self):
         event = self.get_object()
@@ -158,7 +154,6 @@ class EventOwnerMixin(UserPassesTestMixin):
     def handle_no_permission(self):
         messages.error(self.request, 'You do not have permission to modify this event.')
         return super().handle_no_permission()
-
 
 class EventCreateView(LoginRequiredMixin, CreateView):
     model = Event
@@ -176,7 +171,6 @@ class EventCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, 'Event created successfully.')
         return super().form_valid(form)
 
-
 class EventUpdateView(LoginRequiredMixin, EventOwnerMixin, UpdateView):
     model = Event
     form_class = EventForm
@@ -186,7 +180,6 @@ class EventUpdateView(LoginRequiredMixin, EventOwnerMixin, UpdateView):
         messages.success(self.request, 'Event updated successfully.')
         return super().form_valid(form)
 
-
 class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     model = Event
     template_name = 'events/event_confirm_delete.html'
@@ -195,7 +188,6 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, 'Event deleted successfully.')
         return super().form_valid(form)
-
 
 def book_event_seats(request, pk):
     event = get_object_or_404(
@@ -237,7 +229,6 @@ def book_event_seats(request, pk):
             messages.error(request, error)
 
     return redirect('events:event-detail', pk=event.pk)
-
 
 def cancel_event_booking(request, pk):
     event = get_object_or_404(Event.objects.select_related('organizer'), pk=pk)
@@ -292,7 +283,6 @@ def cancel_event_booking(request, pk):
             messages.success(request, f'{cancelled_seats} seat(s) have been cancelled successfully.')
 
     return redirect('events:event-detail', pk=event.pk)
-
 
 def toggle_event_reminders(request, pk):
     event = get_object_or_404(Event, pk=pk)

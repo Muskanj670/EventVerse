@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.db.models import Q, Sum
 from django.shortcuts import redirect
@@ -36,8 +37,18 @@ class SignupView(CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'redirect_url': str(self.success_url)})
         messages.success(self.request, 'Your account has been created successfully. You can now log in.')
         return response
+
+    def form_invalid(self, form):
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            errors = {}
+            for field, field_errors in form.errors.items():
+                errors[field] = list(field_errors)
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+        return super().form_invalid(form)
 
 
 class CustomLoginView(LoginView):
@@ -61,13 +72,16 @@ class CustomLogoutView(LogoutView):
 
 class EmailValidationView(View):
     def get(self, request, *args, **kwargs):
-        email = normalize_email(request.GET.get('email', ''))
+        raw_email = request.GET.get('email', '')
+        email = normalize_email(raw_email)
         if not email:
             return JsonResponse({'valid': False, 'available': False, 'message': 'Email is required.'})
 
-        exists = User.objects.filter(email__iexact=email).exists()
-        if exists:
-            return JsonResponse({'valid': True, 'available': False, 'message': 'This email is already in use.'})
+        try:
+            SignupForm.validate_email_value(raw_email)
+        except ValidationError as exc:
+            return JsonResponse({'valid': False, 'available': False, 'message': exc.messages[0]})
+
         return JsonResponse({'valid': True, 'available': True, 'message': 'Email is available.'})
 
 
@@ -76,24 +90,43 @@ class UsernameValidationView(View):
         username = request.GET.get('username', '').strip()
         if not username:
             return JsonResponse({'valid': False, 'available': False, 'message': 'Username is required.'})
-        if len(username) < 3:
-            return JsonResponse(
-                {'valid': False, 'available': False, 'message': 'Username must be at least 3 characters long.'}
-            )
 
-        exists = User.objects.filter(username__iexact=username).exists()
-        if exists:
-            return JsonResponse({'valid': True, 'available': False, 'message': 'This username is already taken.'})
+        try:
+            SignupForm.validate_username_value(username)
+        except ValidationError as exc:
+            return JsonResponse({'valid': False, 'available': False, 'message': exc.messages[0]})
+
         return JsonResponse({'valid': True, 'available': True, 'message': 'Username is available.'})
+
+
+class PasswordValidationView(View):
+    def get(self, request, *args, **kwargs):
+        password = request.GET.get('password', '')
+        username = request.GET.get('username', '')
+        email = request.GET.get('email', '')
+
+        if not password:
+            return JsonResponse({'valid': False, 'message': 'Password is required.'})
+
+        try:
+            SignupForm.validate_password_value(password, username=username, email=email)
+        except ValidationError as exc:
+            return JsonResponse({'valid': False, 'message': ' '.join(exc.messages)})
+
+        return JsonResponse({'valid': True, 'message': 'Password looks good.'})
 
 
 class SendEmailOTPView(View):
     def post(self, request, *args, **kwargs):
-        email = normalize_email(request.POST.get('email', ''))
+        raw_email = request.POST.get('email', '')
+        email = normalize_email(raw_email)
         if not email:
             return JsonResponse({'success': False, 'message': 'Email is required.'}, status=400)
-        if User.objects.filter(email__iexact=email).exists():
-            return JsonResponse({'success': False, 'message': 'This email is already in use.'}, status=400)
+
+        try:
+            email = SignupForm.validate_email_value(raw_email)
+        except ValidationError as exc:
+            return JsonResponse({'success': False, 'message': exc.messages[0]}, status=400)
 
         otp = create_signup_otp(email, VerificationOTP.Channel.EMAIL, VerificationOTP.Purpose.SIGNUP_EMAIL)
         send_email_otp(email, otp.code)
@@ -113,9 +146,16 @@ class VerifyEmailOTPView(View):
 
 class ProfileSendEmailOTPView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        email = normalize_email(request.POST.get('email', ''))
+        raw_email = request.POST.get('email', '')
+        email = normalize_email(raw_email)
         if not email:
             return JsonResponse({'success': False, 'message': 'Email is required.'}, status=400)
+
+        try:
+            email = SignupForm.base_fields['email'].clean(email)
+        except ValidationError as exc:
+            return JsonResponse({'success': False, 'message': exc.messages[0]}, status=400)
+
         if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
             return JsonResponse({'success': False, 'message': 'This email is already in use.'}, status=400)
 

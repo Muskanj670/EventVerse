@@ -4,6 +4,7 @@ from .views import (
     CustomLoginView,
     CustomLogoutView,
     EmailValidationView,
+    PasswordValidationView,
     ProfileView,
     ProfileSendEmailOTPView,
     ProfileUpdateView,
@@ -27,5 +28,6 @@ urlpatterns = [
     path('profile/send-email-otp/', ProfileSendEmailOTPView.as_view(), name='profile-send-email-otp'),
     path('profile/verify-email-otp/', ProfileVerifyEmailOTPView.as_view(), name='profile-verify-email-otp'),
     path('validate-email/', EmailValidationView.as_view(), name='validate-email'),
+    path('validate-password/', PasswordValidationView.as_view(), name='validate-password'),
     path('validate-username/', UsernameValidationView.as_view(), name='validate-username'),
 ]

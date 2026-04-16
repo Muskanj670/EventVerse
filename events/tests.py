@@ -21,7 +21,6 @@ class EventBookingTests(TestCase):
         self.attendee.email = 'attendee@example.com'
         self.attendee.save(update_fields=['email'])
         self.attendee.profile.email_verified = True
-        self.attendee.profile.phone = '+919876543210'
         self.attendee.profile.city = 'Delhi'
         self.attendee.profile.save()
 

@@ -225,14 +225,13 @@ class HomeViewTests(TestCase):
         self.assertEqual(featured_events[0], second_event)
         self.assertEqual(featured_events[1], first_event)
 
-    def test_signup_requires_verified_email_and_phone_otps(self):
+    def test_signup_requires_verified_email_otp(self):
         response = self.client.post(
             reverse('accounts:signup'),
             {
                 'username': 'newuser',
                 'email': 'newuser@example.com',
                 'role': 'attendee',
-                'phone': '9876543210',
                 'city': 'Jaipur',
                 'password1': 'StrongPass123',
                 'password2': 'StrongPass123',
@@ -259,7 +258,6 @@ class HomeViewTests(TestCase):
                 'username': 'newuser',
                 'email': 'newuser@example.com',
                 'role': 'attendee',
-                'phone': '9876543210',
                 'city': 'Jaipur',
                 'password1': 'StrongPass123',
                 'password2': 'StrongPass123',
@@ -293,17 +291,45 @@ class HomeViewTests(TestCase):
         self.assertEqual(available_response.status_code, 200)
         self.assertTrue(available_response.json()['available'])
 
+    def test_validate_username_rejects_whitespace_and_invalid_characters(self):
+        response = self.client.get(reverse('accounts:validate-username'), {'username': 'sahil upadhyay'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['valid'])
+        self.assertFalse(payload['available'])
+        self.assertIn('@/./+/-/_', payload['message'])
+
+    def test_validate_email_rejects_non_email_input(self):
+        response = self.client.get(reverse('accounts:validate-email'), {'email': 'muskanj'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['valid'])
+        self.assertFalse(payload['available'])
+        self.assertIn('valid email address', payload['message'])
+
+    def test_validate_password_rejects_short_numeric_password(self):
+        response = self.client.get(
+            reverse('accounts:validate-password'),
+            {'password': '1234', 'username': 'muskan', 'email': 'muskan@example.com'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['valid'])
+        self.assertIn('at least 8 characters', payload['message'])
+
     def test_profile_edit_updates_details_and_marks_changed_email_unverified(self):
         user = User.objects.create_user(username='editor', password='pass12345', email='old@example.com')
         user.profile.email_verified = True
-        user.profile.phone = '+919876543210'
         user.profile.city = 'Agra'
         user.profile.save()
 
         self.client.login(username='editor', password='pass12345')
         response = self.client.post(
             reverse('accounts:profile-edit'),
-            {'email': 'new@example.com', 'phone': '9876543211', 'city': 'Delhi'},
+            {'email': 'new@example.com', 'city': 'Delhi'},
             follow=True,
         )
 

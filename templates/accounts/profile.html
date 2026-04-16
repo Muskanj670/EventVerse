@@ -16,9 +16,6 @@
                         {% if profile.email_verified %}Verified{% else %}Pending{% endif %}
                     </span>
                 </p>
-                <p class="mb-2">
-                    <strong>Phone:</strong> {{ profile.phone|default:'Not added' }}
-                </p>
                 <p class="mb-4"><strong>City:</strong> {{ profile.city|default:'Not added' }}</p>
                 <div class="rounded-4 bg-white p-3 shadow-sm">
                     {% if can_view_booking_history %}

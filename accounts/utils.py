@@ -90,7 +90,7 @@ def is_profile_ready_for_booking(user):
     if not user.is_authenticated:
         return False
     profile, _ = UserProfile.objects.get_or_create(user=user)
-    return bool(user.email and profile.email_verified and profile.phone and profile.city)
+    return bool(user.email and profile.email_verified and profile.city)
 
 
 def send_email_otp(email, otp_code):
