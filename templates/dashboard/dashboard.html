@@ -79,7 +79,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="h5 mb-0">Events by Category</h2>
-                    <span class="badge text-bg-light">Distribution</span>
+                    <span class="badge text-bg-light">Pie Chart</span>
                 </div>
                 <canvas id="categoryChart" height="280"></canvas>
             </div>
@@ -89,21 +89,32 @@
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h5 mb-0">Upcoming vs Past</h2>
-                    <span class="badge text-bg-light">Status Mix</span>
+                    <h2 class="h5 mb-0">Seat Occupancy</h2>
+                    <span class="badge text-bg-light">Gauge Chart</span>
                 </div>
-                <canvas id="statusChart" height="280"></canvas>
+                <canvas id="occupancyGaugeChart" height="280"></canvas>
             </div>
         </div>
     </div>
-    <div class="col-12">
+    <div class="col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h5 mb-0">Monthly Event Trend</h2>
-                    <span class="badge text-bg-light">Timeline</span>
+                    <h2 class="h5 mb-0">Monthly Registration Trend</h2>
+                    <span class="badge text-bg-light">Line Chart</span>
                 </div>
                 <canvas id="monthlyChart" height="140"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Registrations by Event</h2>
+                    <span class="badge text-bg-light">Bar Chart</span>
+                </div>
+                <canvas id="eventVolumeChart" height="140"></canvas>
             </div>
         </div>
     </div>
@@ -170,40 +181,130 @@
 <script>
     const categoryLabels = {{ chart_category_labels|safe }};
     const categoryTotals = {{ chart_category_totals|safe }};
-    const statusTotals = {{ chart_status_totals|safe }};
     const monthLabels = {{ chart_month_labels|safe }};
     const monthTotals = {{ chart_month_totals|safe }};
+    const eventLabels = {{ chart_event_labels|safe }};
+    const eventTotals = {{ chart_event_totals|safe }};
+    const seatOccupancyPercentage = {{ seat_occupancy_percentage|default:0 }};
+
+    const gaugeNeedlePlugin = {
+        id: 'gaugeNeedlePlugin',
+        afterDatasetsDraw(chart) {
+            if (chart.canvas.id !== 'occupancyGaugeChart') {
+                return;
+            }
+
+            const { ctx } = chart;
+            const meta = chart.getDatasetMeta(0);
+            const arc = meta.data[0];
+
+            if (!arc) {
+                return;
+            }
+
+            const angle = chart.options.rotation + ((seatOccupancyPercentage / 100) * chart.options.circumference);
+            const cx = arc.x;
+            const cy = arc.y;
+            const needleLength = arc.outerRadius * 0.75;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, -4);
+            ctx.lineTo(needleLength, 0);
+            ctx.lineTo(0, 4);
+            ctx.fillStyle = '#1d3557';
+            ctx.fill();
+            ctx.restore();
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+            ctx.fillStyle = '#1d3557';
+            ctx.fill();
+            ctx.restore();
+        }
+    };
+
+    const gaugeLabelPlugin = {
+        id: 'gaugeLabelPlugin',
+        afterDraw(chart) {
+            if (chart.canvas.id !== 'occupancyGaugeChart') {
+                return;
+            }
+
+            const { ctx, chartArea } = chart;
+            const centerX = (chartArea.left + chartArea.right) / 2;
+            const valueY = chartArea.top + ((chartArea.bottom - chartArea.top) * 0.72);
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '700 28px sans-serif';
+            ctx.fillText(`${seatOccupancyPercentage}%`, centerX, valueY);
+            ctx.fillStyle = '#6c757d';
+            ctx.font = '500 13px sans-serif';
+            ctx.fillText('Seats filled', centerX, valueY + 24);
+            ctx.restore();
+        }
+    };
+
+    Chart.register(gaugeNeedlePlugin, gaugeLabelPlugin);
 
     if (document.getElementById('categoryChart')) {
         new Chart(document.getElementById('categoryChart'), {
-            type: 'bar',
+            type: 'pie',
             data: {
                 labels: categoryLabels,
                 datasets: [{
                     label: 'Events',
                     data: categoryTotals,
                     backgroundColor: ['#1d3557', '#457b9d', '#a8dadc', '#f4a261', '#e76f51', '#2a9d8f', '#6c757d'],
-                    borderRadius: 8
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
                 }]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false } }
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
             }
         });
     }
 
-    if (document.getElementById('statusChart')) {
-        new Chart(document.getElementById('statusChart'), {
+    if (document.getElementById('occupancyGaugeChart')) {
+        new Chart(document.getElementById('occupancyGaugeChart'), {
             type: 'doughnut',
             data: {
-                labels: ['Upcoming', 'Past'],
+                labels: ['Occupied', 'Available'],
                 datasets: [{
-                    data: statusTotals,
-                    backgroundColor: ['#2a9d8f', '#6c757d']
+                    data: [seatOccupancyPercentage, Math.max(100 - seatOccupancyPercentage, 0)],
+                    backgroundColor: ['#2a9d8f', '#dfe7ec'],
+                    borderWidth: 0,
+                    cutout: '72%'
                 }]
             },
-            options: { responsive: true }
+            options: {
+                responsive: true,
+                rotation: -90,
+                circumference: 180,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                return `${context.label}: ${context.raw}%`;
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
@@ -213,7 +314,7 @@
             data: {
                 labels: monthLabels,
                 datasets: [{
-                    label: 'Events',
+                    label: 'Registrations',
                     data: monthTotals,
                     fill: true,
                     tension: 0.35,
@@ -227,6 +328,43 @@
                     y: {
                         beginAtZero: true,
                         ticks: { precision: 0 }
+                    }
+                }
+            }
+        });
+    }
+
+    if (document.getElementById('eventVolumeChart')) {
+        new Chart(document.getElementById('eventVolumeChart'), {
+            type: 'bar',
+            data: {
+                labels: eventLabels,
+                datasets: [{
+                    label: 'Confirmed Seats',
+                    data: eventTotals,
+                    backgroundColor: '#457b9d',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
                     }
                 }
             }

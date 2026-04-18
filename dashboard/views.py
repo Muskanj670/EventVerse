@@ -7,7 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.core.paginator import Paginator
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -47,15 +47,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             .annotate(total=Count('id'))
             .order_by('category__name')
         )
-        monthly_stats = list(
-            queryset.annotate(month=TruncMonth('start_date'))
-            .values('month')
-            .annotate(total=Count('id'))
-            .order_by('month')
-        )
         registrations = Registration.objects.filter(event__in=queryset)
         if get_user_role(self.request.user) != 'admin':
             registrations = registrations.filter(event__organizer=self.request.user)
+        monthly_stats = list(
+            registrations.filter(status=Registration.Status.CONFIRMED)
+            .annotate(month=TruncMonth('registered_at'))
+            .values('month')
+            .annotate(total=Sum('seat_count'))
+            .order_by('month')
+        )
         confirmed_registrations_qs = registrations.filter(status=Registration.Status.CONFIRMED)
         total_revenue = sum(
             (registration.event.price * registration.seat_count for registration in confirmed_registrations_qs),
@@ -64,6 +65,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         upcoming_events = sum(1 for event in events if event.end_datetime >= now)
         past_events = sum(1 for event in events if event.end_datetime < now)
         confirmed_registrations = confirmed_registrations_qs.aggregate(total=Sum('seat_count'))['total'] or 0
+        event_registration_stats = list(
+            queryset.annotate(
+                confirmed_seat_total=Sum(
+                    'registrations__seat_count',
+                    filter=Q(registrations__status=Registration.Status.CONFIRMED),
+                )
+            )
+            .values('title', 'confirmed_seat_total')
+            .order_by('-confirmed_seat_total', 'title')
+        )
+        total_capacity = sum(event.capacity for event in events)
+        occupancy_percentage = round((confirmed_registrations / total_capacity) * 100, 1) if total_capacity else 0
 
         context.update(
             {
@@ -81,16 +94,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     [item['category__name'] for item in category_stats]
                 ),
                 'chart_category_totals': json.dumps([item['total'] for item in category_stats]),
-                'chart_status_totals': json.dumps(
-                    [
-                        upcoming_events,
-                        past_events,
-                    ]
-                ),
                 'chart_month_labels': json.dumps(
                     [item['month'].strftime('%b %Y') for item in monthly_stats if item['month']]
                 ),
                 'chart_month_totals': json.dumps([item['total'] for item in monthly_stats]),
+                'chart_event_labels': json.dumps([item['title'] for item in event_registration_stats]),
+                'chart_event_totals': json.dumps(
+                    [(item['confirmed_seat_total'] or 0) for item in event_registration_stats]
+                ),
+                'seat_occupancy_percentage': occupancy_percentage,
                 'dashboard_role': get_user_role(self.request.user),
             }
         )

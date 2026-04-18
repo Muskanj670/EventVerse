@@ -13,7 +13,23 @@
                     {% for field in form %}
                         <div class="mb-3">
                             <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            {{ field }}
+                            {% if field.name == 'password' %}
+                                <div class="password-toggle-group">
+                                    {{ field }}
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary password-toggle-button"
+                                        data-password-toggle
+                                        data-target-id="{{ field.id_for_label }}"
+                                        aria-label="Show password"
+                                        aria-pressed="false"
+                                    >
+                                        Show
+                                    </button>
+                                </div>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
                             {% for error in field.errors %}
                                 <div class="text-danger small">{{ error }}</div>
                             {% endfor %}
@@ -29,4 +45,24 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const input = document.getElementById(button.dataset.targetId);
+
+            if (!input) {
+                return;
+            }
+
+            const showingPassword = input.type === 'text';
+            input.type = showingPassword ? 'password' : 'text';
+            button.textContent = showingPassword ? 'Show' : 'Hide';
+            button.setAttribute('aria-label', showingPassword ? 'Show password' : 'Hide password');
+            button.setAttribute('aria-pressed', String(!showingPassword));
+        });
+    });
+</script>
 {% endblock %}

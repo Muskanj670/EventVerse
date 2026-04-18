@@ -87,6 +87,26 @@ body {
     padding: 0.75rem 0.9rem;
 }
 
+.password-toggle-group {
+    position: relative;
+}
+
+.password-toggle-group .form-control {
+    padding-right: 5.5rem;
+}
+
+.password-toggle-button {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    min-width: 4.25rem;
+    border-radius: 0.6rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.2;
+}
+
 .page-link {
     color: #1d3557;
 }
