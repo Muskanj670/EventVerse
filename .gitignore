@@ -3,3 +3,4 @@ staticfiles/
 __pycache__/
 *.pyc
 db.sqlite3-journal
+db.sqlite3
